@@ -26,7 +26,11 @@
     "orphan-files",
     "code-analysis"
   ],
-  "author": "",
+  "author": "Junaid Hamzae",
+  "homepage": "https://github.com/junaidhamzae/codereap#readme",
+  "bugs": {
+    "url": "https://github.com/junaidhamzae/codereap/issues"
+  },
   "license": "MIT",
   "dependencies": {
     "@babel/parser": "^7.28.0",
