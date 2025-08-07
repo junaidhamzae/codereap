@@ -1,7 +1,7 @@
 # CodeReap
 
 [![NPM Version](https://img.shields.io/npm/v/codereap.svg)](https://www.npmjs.com/package/codereap)
-[![License](https://img.shields.io/npm/l/codereap.svg)](https://github.com/junaidhamzae/codereap/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/junaidhamzae/codereap.svg)](https://github.com/junaidhamzae/codereap/blob/main/LICENSE)
 
 > Harvest the living, reap the dead.
 
