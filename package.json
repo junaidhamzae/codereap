@@ -1,0 +1,47 @@
+{
+  "name": "codereap",
+  "version": "0.1.0",
+  "description": "Harvest the living, reap the dead.",
+  "main": "dist/index.js",
+  "bin": {
+    "codereap": "bin/codereap.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "src/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/codereap.git"
+  },
+  "scripts": {
+    "start": "node bin/codereap.js",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cli",
+    "dependency-graph",
+    "orphan-files",
+    "code-analysis"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/parser": "^7.28.0",
+    "@babel/traverse": "^7.28.0",
+    "@babel/types": "^7.28.2",
+    "commander": "^14.0.0",
+    "csv-writer": "^1.6.0",
+    "fast-glob": "^3.3.3",
+    "micromatch": "^4.0.8"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
+    "@types/micromatch": "^4.0.9",
+    "@types/node": "^24.2.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "typescript": "^5.9.2"
+  }
+}
