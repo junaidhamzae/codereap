@@ -5,18 +5,31 @@
 
 > Harvest the living, reap the dead.
 
-CodeReap is a command-line tool that scans your codebase, builds a dependency graph, and identifies orphan files that are no longer referenced by any other part of your project.
+CodeReap is a command‑line tool that helps you find dead (or “orphan”) files and directories in JavaScript/TypeScript projects. It scans your source tree, builds a dependency graph from your import/require statements, and determines which files are reachable from your project’s entry points. Anything not reachable is marked as an orphan, so you can confidently delete it and keep your repo lean.
 
-## What it does
+---
 
-1.  **Scans**: Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss`).
-2.  **Parses**: Uses AST (Abstract Syntax Tree) parsing to identify all `import` and `export` statements.
-3.  **Graphs**: Builds a directed graph of all dependencies between your files.
-4.  **Reports & Prunes**: Identifies orphan files based on reachability from project entrypoints. Any file not reachable from an entrypoint is marked as orphan.
+## Why use CodeReap?
 
-## Why the name works
+Modern codebases accumulate unused components, pages and modules over time. Those unused files bloat your repository and slow down refactoring. CodeReap acts like a grim reaper for your codebase — it identifies and reports the files or folders that nothing else imports. This helps you:
 
-Like a grim reaper for your codebase, CodeReap helps you identify and remove the dead code that's bloating your project.
+- keep projects tidy and maintainable,
+- reduce bundle sizes by removing unused code,
+- catch mistaken imports or misconfigured aliases.
+
+---
+
+## How it works
+
+- **Scan** – Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss` by default). You can customise the set of extensions to include.
+- **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. Other file types are still represented as nodes.
+- **Resolve** – Imports are resolved using relative paths, `baseUrl`/`paths` mappings from `tsconfig.json` or `jsconfig.json`, custom alias patterns and an optional `importRoot`. Node.js resolution is used as a last resort.
+- **Graph** – A directed graph is built where each file is a node and edges represent dependencies.
+- **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`) and script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references). When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
+- **Prune (reachability)** – From entrypoints, the graph is traversed to find all live files. Files that are not reachable are marked as orphans.
+- **Report** – Results can be written to JSON or CSV. File reports include the path, an existence flag, in‑degree (incoming edges, informational) and whether it is an orphan. Directory reports aggregate counts and whether a directory is orphan.
+
+---
 
 ## Installation
 
@@ -24,71 +37,70 @@ Like a grim reaper for your codebase, CodeReap helps you identify and remove the
 npm install -g codereap
 ```
 
+Run `codereap --help` at any time to see available options.
+
+---
+
 ## Usage
 
 ```bash
 codereap [options]
 ```
 
-### Options
+### Key options
 
-| Flag           | Description                                                 | Default                               |
-| -------------- | ----------------------------------------------------------- | ------------------------------------- |
-| `--root`       | Root directory of the project to scan                       | `process.cwd()`                       |
-| `--extensions` | Comma-separated list of file extensions to include          | `js,ts,jsx,tsx,json,css,scss`         |
-| `--exclude`    | Comma-separated list of glob patterns to exclude            | `''`                                  |
-| `--out`        | Output file path for the report (without extension)         | `codereap-report`                     |
-| `--format`     | Output format: `json` or `csv` (omit to skip writing files) | `''` (no file output)                 |
-| `--config`     | Path to `codereap.config.json`                              | `./codereap.config.json` if present   |
-| `--importRoot` | Directory to resolve non-relative imports from              | from ts/jsconfig or config            |
-| `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)   | from ts/jsconfig `paths` or config    |
-| `--dirOnly`    | Aggregate per-directory and report orphan directories       | off                                   |
+- `--root <path>` – root directory to scan (defaults to current working directory)
+- `--extensions <exts>` – comma‑separated list of extensions (default: `js,ts,jsx,tsx,json,css,scss`)
+- `--exclude <patterns>` – comma‑separated glob patterns to ignore (e.g. `**/__tests__/**`)
+- `--format <json|csv>` – choose JSON or CSV output; if omitted, no report file is written
+- `--out <path>` – base filename for the report (default: `codereap-report`)
+- `--config <path>` – path to `codereap.config.json` (if present and not overridden)
+- `--importRoot <path>` – override the base directory used to resolve non‑relative imports
+- `--alias <pattern=target>` – one or more alias mappings (comma‑separate) like TypeScript `paths`
+- `--dirOnly` – aggregate by directory and report orphan directories instead of files
+- `--onlyOrphans` – include only orphan rows in the report
 
-### Example
+---
+
+## Examples
+
+Scan the `src` folder, ignore tests and generate a prettified JSON report:
 
 ```bash
-codereap --root ./src --exclude "**/__tests__/**,**/*.spec.ts" --format json --out codereap-report
+codereap --root ./src \
+  --exclude "**/__tests__/**,**/*.spec.ts" \
+  --format json \
+  --out codereap-report
 ```
 
-This scans the `src` directory, ignores test files, and writes a prettified JSON report to `codereap-report.json`.
-
-To write CSV instead:
+Write a CSV report instead:
 
 ```bash
 codereap --root ./src --format csv --out codereap-report
 ```
 
-Directory-only mode (report orphan directories):
+Aggregate by directory and only list orphan folders:
 
 ```bash
-codereap --root ./src --dirOnly --format json --out codereap-dirs
+codereap --dirOnly --onlyOrphans --format json --out codereap-dirs
 ```
 
 Notes:
 - Writing a file happens only when `--format` is provided.
 - All paths in reports are relative to `--root`.
-- JSON output is always pretty-printed.
+- JSON output is always pretty‑printed.
 
-### Report schemas
+---
 
-- File mode (default): each row/object represents a file
-  - `node`: path to the file relative to `--root`
-  - `exists`: always `true` (present in the scan)
-  - `in-degree`: number of other files that import this file (informational)
-  - `orphan`: `true` when the file is not reachable from any entrypoint
+## Working with aliases and tsconfig
 
-- Directory mode (`--dirOnly`): each row/object represents a directory
-  - `directory`: directory path relative to `--root`
-  - `file-count`: number of files in that directory included in the scan
-  - `external-in-degree`: count of imports coming from outside this directory
-  - `orphan`: `true` when `file-count > 0`, `external-in-degree === 0`, and none of the files in the directory are reachable from any entrypoint
+CodeReap will read `tsconfig.json` or `jsconfig.json` to honour `compilerOptions.baseUrl` and `paths` mappings and will automatically map built JavaScript files back to their TypeScript sources when `rootDir` and `outDir` are defined.
 
-### Configuration
+You can override these settings on the command line with `--importRoot` and `--alias`. Settings may also be specified in a `codereap.config.json` file.
 
-CodeReap can read import resolution settings from `codereap.config.json`. CLI flags override the file, which overrides `tsconfig.json`/`jsconfig.json`.
-You can also set `format` here (`"json"` or `"csv"`) to control report output when you don't pass `--format`.
+Precedence is: CLI > codereap.config.json > tsconfig/jsconfig.
 
-Example `codereap.config.json`:
+### Example codereap.config.json
 
 ```json
 {
@@ -105,16 +117,57 @@ Example `codereap.config.json`:
 }
 ```
 
-CLI alias examples (quote wildcards in zsh):
+You can then run:
+
+```bash
+codereap --config codereap.config.json
+```
+
+…and still override individual options via CLI flags as needed.
+
+#### CLI alias examples (quote wildcards in zsh)
 
 ```bash
 codereap --alias "@/*=src/*,components/*=src/components/*" --importRoot ./src
 codereap --alias "src/*=src/*" --root .
 ```
 
+---
+
+## Interpreting the report
+
+When you run CodeReap without `--dirOnly`, each row in the report represents a file. Columns:
+
+- `node` – relative path to the file
+- `exists` – always `true` for scanned files
+- `in‑degree` – number of other files that import it (informational)
+- `orphan` – `true` if the file is not reachable from any entry point
+
+With `--dirOnly`, the report lists directories. Each record includes:
+
+- `directory` – directory path (relative)
+- `file-count` – number of files in the directory
+- `external-in-degree` – imports coming from outside the directory
+- `orphan` – `true` when `file-count > 0`, `external-in-degree === 0`, and none of the files in the directory are reachable from any entrypoint
+
+A file or directory flagged as `orphan` is a candidate for deletion. Some files (e.g. test fixtures or documentation) may be intentionally unreferenced — add their patterns to `--exclude` or your config file.
+
+---
+
+## Limitations and tips
+
+- Dynamic import expressions (`import(someVariable)`) and computed `require` calls are treated as dynamic and may not be fully resolved.
+- CodeReap does not analyse runtime module resolution (e.g. globbing or environment‑dependent imports); review results before deleting.
+- Only the file types you include are scanned; other assets (images, fonts, etc.) are ignored unless you add their extensions.
+- Running CodeReap regularly in CI can help prevent new orphan files from creeping in.
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request.
+
+---
 
 ## License
 
