@@ -8,7 +8,8 @@ export async function reportGraph(
   outPath: string,
   projectRoot: string,
   format?: 'json' | 'csv',
-  onlyOrphans?: boolean
+  onlyOrphans?: boolean,
+  liveFiles?: Set<string>
 ): Promise<string | undefined> {
   // If no format specified, do not write any file
   if (!format) return undefined;
@@ -29,7 +30,7 @@ export async function reportGraph(
   let records: Array<{ [key: string]: string | number | boolean }> = nodes.map(nodeAbs => {
     const node = path.relative(projectRoot, nodeAbs);
     const inDeg = inDegreeMap[nodeAbs] ?? 0;
-    const orphan = inDeg === 0;
+    const orphan = liveFiles ? !liveFiles.has(nodeAbs) : inDeg === 0;
     return {
       node,
       exists: true,
@@ -74,7 +75,11 @@ export type DirectoryRecord = {
   orphan: boolean;
 };
 
-export function computeDirectoryRecords(graph: Graph, projectRoot: string): DirectoryRecord[] {
+export function computeDirectoryRecords(
+  graph: Graph,
+  projectRoot: string,
+  liveFiles?: Set<string>
+): DirectoryRecord[] {
   const dirOf = (absPath: string): string => {
     const relDir = path.relative(projectRoot, path.dirname(absPath)) || '.';
     return relDir;
@@ -82,11 +87,15 @@ export function computeDirectoryRecords(graph: Graph, projectRoot: string): Dire
 
   const fileCount: Record<string, number> = Object.create(null);
   const externalIn: Record<string, number> = Object.create(null);
+  const liveFileCount: Record<string, number> = Object.create(null);
 
   for (const node of graph.nodes) {
     const d = dirOf(node);
     fileCount[d] = (fileCount[d] || 0) + 1;
     if (!(d in externalIn)) externalIn[d] = 0;
+    if (liveFiles && liveFiles.has(node)) {
+      liveFileCount[d] = (liveFileCount[d] || 0) + 1;
+    }
   }
 
   for (const [from, to] of graph.edges) {
@@ -101,11 +110,12 @@ export function computeDirectoryRecords(graph: Graph, projectRoot: string): Dire
   const records: DirectoryRecord[] = allDirs.map((directory) => {
     const fc = fileCount[directory] || 0;
     const inDeg = externalIn[directory] || 0;
+    const liveInDir = liveFiles ? (liveFileCount[directory] || 0) : 0;
     return {
       directory,
       'file-count': fc,
       'external-in-degree': inDeg,
-      orphan: fc > 0 && inDeg === 0,
+      orphan: fc > 0 && inDeg === 0 && (liveFiles ? liveInDir === 0 : true),
     };
   });
 
@@ -117,11 +127,12 @@ export async function reportDirectories(
   outPath: string,
   projectRoot: string,
   format?: 'json' | 'csv',
-  onlyOrphans?: boolean
+  onlyOrphans?: boolean,
+  liveFiles?: Set<string>
 ): Promise<string | undefined> {
   if (!format) return undefined;
 
-  let records = computeDirectoryRecords(graph, projectRoot);
+  let records = computeDirectoryRecords(graph, projectRoot, liveFiles);
   if (onlyOrphans) {
     records = records.filter(r => r.orphan);
   }

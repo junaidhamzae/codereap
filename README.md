@@ -12,7 +12,7 @@ CodeReap is a command-line tool that scans your codebase, builds a dependency gr
 1.  **Scans**: Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss`).
 2.  **Parses**: Uses AST (Abstract Syntax Tree) parsing to identify all `import` and `export` statements.
 3.  **Graphs**: Builds a directed graph of all dependencies between your files.
-4.  **Reports & Prunes**: Identifies all nodes in the graph with an in-degree of zero—these are your orphan files.
+4.  **Reports & Prunes**: Identifies orphan files based on reachability from project entrypoints. Any file not reachable from an entrypoint is marked as orphan.
 
 ## Why the name works
 
@@ -74,14 +74,14 @@ Notes:
 - File mode (default): each row/object represents a file
   - `node`: path to the file relative to `--root`
   - `exists`: always `true` (present in the scan)
-  - `in-degree`: number of other files that import this file
-  - `orphan`: `true` when `in-degree === 0`
+  - `in-degree`: number of other files that import this file (informational)
+  - `orphan`: `true` when the file is not reachable from any entrypoint
 
 - Directory mode (`--dirOnly`): each row/object represents a directory
   - `directory`: directory path relative to `--root`
   - `file-count`: number of files in that directory included in the scan
   - `external-in-degree`: count of imports coming from outside this directory
-  - `orphan`: `true` when `file-count > 0` and `external-in-degree === 0`
+  - `orphan`: `true` when `file-count > 0`, `external-in-degree === 0`, and none of the files in the directory are reachable from any entrypoint
 
 ### Configuration
 

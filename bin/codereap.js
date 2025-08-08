@@ -12,6 +12,7 @@ const {
   reportGraph,
   reportDirectories,
   findOrphans,
+  computeLiveFiles,
   loadCodereapConfig,
   loadTsJsConfig,
   mergeResolutionOptions,
@@ -57,10 +58,7 @@ program
     '--dirOnly',
     'Aggregate at directory level and report orphan directories'
   )
-  .option(
-    '--onlyOrphans',
-    'When writing reports, include only orphan rows'
-  )
+  .option('--onlyOrphans', 'When writing reports, include only orphan rows')
   .parse(process.argv);
 
 const options = program.opts();
@@ -279,20 +277,24 @@ async function main() {
 
   if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
+    // Compute live files via reachability from entrypoints
+    const liveFiles = computeLiveFiles(graph, entrypoints);
     const writtenPath = options.dirOnly
       ? await reportDirectories(
           graph,
           effectiveOut,
           mergedRoot,
           effectiveFormat,
-          options.onlyOrphans
+          options.onlyOrphans,
+          liveFiles
         )
       : await reportGraph(
           graph,
           effectiveOut,
           mergedRoot,
           effectiveFormat,
-          options.onlyOrphans
+          options.onlyOrphans,
+          liveFiles
         );
     console.log(`Report generated at ${writtenPath}`);
   }
@@ -300,16 +302,26 @@ async function main() {
   if (options.dirOnly) {
     console.log('Finding orphan directories...');
     // Count directories with orphan=true
+    const liveFiles = computeLiveFiles(graph, entrypoints);
     const dirRecords = require('../dist/reporter').computeDirectoryRecords(
       graph,
-      mergedRoot
+      mergedRoot,
+      liveFiles
     );
     const orphanDirs = dirRecords.filter((r) => r.orphan);
     console.log(`Orphan directories count: ${orphanDirs.length}`);
   } else {
     console.log('Finding orphans...');
-    const orphans = findOrphans(graph, entrypoints, exclude);
-    console.log(`Orphan files count: ${orphans.length}`);
+    // Reachability-based orphan files
+    const liveFiles = computeLiveFiles(graph, entrypoints);
+    const orphans = [...graph.nodes].filter((n) => !liveFiles.has(n));
+    // Apply exclude patterns at the end for printing consistency
+    const micromatch = require('micromatch');
+    const filtered =
+      exclude && exclude.length > 0
+        ? micromatch.not(orphans, exclude)
+        : orphans;
+    console.log(`Orphan files count: ${filtered.length}`);
   }
 
   console.log('Done.');
