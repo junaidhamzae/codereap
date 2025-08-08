@@ -42,8 +42,8 @@ program
   .option('--pretty', 'Prettify JSON output')
   .option('--config <path>', 'Path to codereap.config.json (optional)')
   .option(
-    '--baseUrl <path>',
-    'Base directory for non-relative imports (overrides ts/jsconfig and file config)'
+    '--importRoot <path>',
+    'Directory to resolve non-relative imports from (overrides ts/jsconfig and file config)'
   )
   .option(
     '--alias <mapping>',
@@ -81,11 +81,11 @@ async function main() {
     }
   }
 
-  const cliBaseUrl = options.baseUrl ? path.resolve(root, options.baseUrl) : undefined;
-  const { root: mergedRoot, baseUrl, paths } = mergeResolutionOptions(
+  const cliImportRoot = options.importRoot ? path.resolve(root, options.importRoot) : undefined;
+  const { root: mergedRoot, importRoot, paths } = mergeResolutionOptions(
     root,
-    { baseUrl: cliBaseUrl, paths: cliPaths },
-    { baseUrl: fileCfg.baseUrl, paths: fileCfg.paths },
+    { importRoot: cliImportRoot, paths: cliPaths },
+    { importRoot: fileCfg.importRoot, paths: fileCfg.paths },
     tsjs,
   );
 
@@ -151,7 +151,7 @@ async function main() {
     allFilesToParse.map(async (file) => {
       const { imports } = await parseFile(file);
       for (const imp of imports) {
-        let resolved = resolveImport(file, imp, { root: mergedRoot, baseUrl, paths });
+        let resolved = resolveImport(file, imp, { root: mergedRoot, importRoot, paths });
         if (resolved) {
           if (rootDir && outDir && resolved.includes(outDir)) {
             const sourceFile = resolved.replace(outDir, rootDir).replace('.js', '.ts');

@@ -5,7 +5,7 @@ export interface CodereapConfig {
   root?: string;
   extensions?: string[];
   exclude?: string[];
-  baseUrl?: string;
+  importRoot?: string;
   aliases?: Record<string, string | string[]>;
   out?: string;
   pretty?: boolean;
@@ -15,14 +15,14 @@ export interface LoadedConfig {
   root: string;
   extensions: string[];
   exclude: string[];
-  baseUrl?: string; // absolute path
+  importRoot?: string; // absolute path
   paths?: Record<string, string[]>; // tsconfig-like
   out: string;
   pretty: boolean;
 }
 
 export interface TsJsConfig {
-  baseUrl?: string; // absolute
+  baseUrl?: string; // absolute (mapped to importRoot)
   paths?: Record<string, string[]>;
 }
 
@@ -51,7 +51,7 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
 
   const exclude = Array.isArray(data.exclude) ? data.exclude : [];
 
-  const baseUrlAbs = data.baseUrl ? path.resolve(rootAbs, data.baseUrl) : undefined;
+  const importRootAbs = data.importRoot ? path.resolve(rootAbs, data.importRoot) : undefined;
 
   // Convert aliases to tsconfig-style paths
   let paths: Record<string, string[]> | undefined = undefined;
@@ -67,7 +67,7 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     root: data.root ? path.resolve(rootAbs, data.root) : rootAbs,
     extensions,
     exclude,
-    baseUrl: baseUrlAbs,
+    importRoot: importRootAbs,
     paths,
     out: data.out || 'codereap-report',
     pretty: Boolean(data.pretty),
@@ -99,14 +99,14 @@ export function loadTsJsConfig(root: string): TsJsConfig {
 
 export function mergeResolutionOptions(
   root: string,
-  fromCli: { baseUrl?: string; paths?: Record<string, string[]> },
-  fromFile: { baseUrl?: string; paths?: Record<string, string[]> },
+  fromCli: { importRoot?: string; paths?: Record<string, string[]> },
+  fromFile: { importRoot?: string; paths?: Record<string, string[]> },
   fromTsJs: { baseUrl?: string; paths?: Record<string, string[]> },
 ) {
   // Precedence: CLI > file config > ts/jsconfig
-  const baseUrl = fromCli.baseUrl || fromFile.baseUrl || fromTsJs.baseUrl;
+  const importRoot = fromCli.importRoot || fromFile.importRoot || fromTsJs.baseUrl;
   const paths = fromCli.paths || fromFile.paths || fromTsJs.paths;
-  return { root: path.resolve(root), baseUrl, paths };
+  return { root: path.resolve(root), importRoot, paths };
 }
 
 

@@ -5,7 +5,7 @@ const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.json'];
 
 export interface ResolveOptions {
   root: string; // absolute project root
-  baseUrl?: string; // absolute base directory
+  importRoot?: string; // absolute base directory
   paths?: Record<string, string[]>; // tsconfig-like mapping
   extensions?: string[];
 }
@@ -71,9 +71,9 @@ export function resolveImport(from: string, specifier: string, options?: Resolve
     if (p) return p;
   }
 
-  // 3) baseUrl
-  if (options?.baseUrl) {
-    const candidate = path.resolve(options.baseUrl, specifier);
+  // 3) importRoot (previously baseUrl)
+  if (options?.importRoot) {
+    const candidate = path.resolve(options.importRoot, specifier);
     const p = tryResolveAsFileOrDir(candidate, extensions);
     if (p) return p;
   }

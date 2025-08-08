@@ -40,7 +40,7 @@ codereap [options]
 | `--out`        | Output file path for the report (without extension)         | `codereap-report`                     |
 | `--pretty`     | Prettify JSON output                                        | `false`                               |
 | `--config`     | Path to `codereap.config.json`                               | `./codereap.config.json` if present   |
-| `--baseUrl`    | Base directory for non-relative imports                      | from ts/jsconfig or config            |
+| `--importRoot` | Directory to resolve non-relative imports from                | from ts/jsconfig or config            |
 | `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)    | from ts/jsconfig `paths` or config    |
 
 ### Example
@@ -62,7 +62,7 @@ Example `codereap.config.json`:
   "root": ".",
   "extensions": ["js", "ts", "jsx", "tsx"],
   "exclude": ["**/__tests__/**", "**/*.spec.ts"],
-  "baseUrl": "src",
+  "importRoot": "src",
   "aliases": {
     "src/*": ["src/*"],
     "@/*": ["src/*"],
