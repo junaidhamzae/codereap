@@ -6,3 +6,5 @@ coverage/
 .nyc_output/
 .env
 tasks.md
+codereap-report.json
+codereap-report.csv
