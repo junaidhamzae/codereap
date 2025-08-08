@@ -150,6 +150,50 @@ async function main() {
       ? Object.values(packageJson.bin).map((p) => path.resolve(root, p))
       : [];
 
+    // Extract script entrypoints (always include behavior)
+    const scriptEntrypoints = new Set();
+    const extsPattern = '(?:js|jsx|ts|tsx)';
+    const runners = [
+      'node',
+      'nodemon',
+      'pm2\\s+start',
+      'ts-node(?:\\S*)?',
+      'tsx',
+      'babel-node',
+    ];
+    const runnerRegex = new RegExp(
+      `(?:^|\\s)(?:${runners.join(
+        '|'
+      )})\\s+([\"\']?)([^\s\"\']+\.${extsPattern})(?:\\1)(?=\s|$)`,
+      'i'
+    );
+    const fileRegex = new RegExp(
+      `(^|\\s)([^\\s]+\\.${extsPattern})(?=\\s|$)`,
+      'i'
+    );
+    const splitRegex = /\s*(?:&&|\|\||;|\n)\s*/g;
+
+    if (packageJson.scripts && typeof packageJson.scripts === 'object') {
+      for (const val of Object.values(packageJson.scripts)) {
+        if (typeof val !== 'string' || !val) continue;
+        const parts = val.split(splitRegex);
+        for (const part of parts) {
+          let m = part.match(runnerRegex);
+          if (m && m[2]) {
+            const candidate = m[2];
+            scriptEntrypoints.add(candidate);
+            continue;
+          }
+          // fallback: bare file token
+          m = part.match(fileRegex);
+          if (m && m[2]) {
+            const candidate = m[2];
+            scriptEntrypoints.add(candidate);
+          }
+        }
+      }
+    }
+
     const rawEntrypoints = [...main, ...module, ...bin];
     entrypoints = rawEntrypoints
       .map((p) => {
@@ -160,6 +204,19 @@ async function main() {
         return p;
       })
       .filter(Boolean);
+
+    // Append script entrypoints (resolve relative to root, map built->source when possible)
+    for (const rel of scriptEntrypoints) {
+      const abs = path.resolve(root, rel);
+      let finalPath = abs;
+      if (rootDir && outDir && abs.includes(outDir)) {
+        const sourceFile = abs.replace(outDir, rootDir).replace('.js', '.ts');
+        if (fs.existsSync(sourceFile)) finalPath = sourceFile;
+      }
+      if (fs.existsSync(finalPath)) {
+        entrypoints.push(finalPath);
+      }
+    }
   }
 
   console.log('Project Source Entrypoints:', entrypoints);
