@@ -57,6 +57,10 @@ program
     '--dirOnly',
     'Aggregate at directory level and report orphan directories'
   )
+  .option(
+    '--onlyOrphans',
+    'When writing reports, include only orphan rows'
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -193,6 +197,7 @@ async function main() {
           root: mergedRoot,
           importRoot,
           paths,
+          extensions: extensions.map((e) => (e.startsWith('.') ? e : `.${e}`)),
         });
         if (resolved) {
           if (rootDir && outDir && resolved.includes(outDir)) {
@@ -222,9 +227,16 @@ async function main() {
           graph,
           effectiveOut,
           mergedRoot,
-          effectiveFormat
+          effectiveFormat,
+          options.onlyOrphans
         )
-      : await reportGraph(graph, effectiveOut, mergedRoot, effectiveFormat);
+      : await reportGraph(
+          graph,
+          effectiveOut,
+          mergedRoot,
+          effectiveFormat,
+          options.onlyOrphans
+        );
     console.log(`Report generated at ${writtenPath}`);
   }
 

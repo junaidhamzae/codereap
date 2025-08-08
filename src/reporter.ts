@@ -7,7 +7,8 @@ export async function reportGraph(
   graph: Graph,
   outPath: string,
   projectRoot: string,
-  format?: 'json' | 'csv'
+  format?: 'json' | 'csv',
+  onlyOrphans?: boolean
 ): Promise<string | undefined> {
   // If no format specified, do not write any file
   if (!format) return undefined;
@@ -25,7 +26,7 @@ export async function reportGraph(
   }
 
   // Build per-node records with requested fields and root-relative node paths
-  const records: Array<{ [key: string]: string | number | boolean }> = nodes.map(nodeAbs => {
+  let records: Array<{ [key: string]: string | number | boolean }> = nodes.map(nodeAbs => {
     const node = path.relative(projectRoot, nodeAbs);
     const inDeg = inDegreeMap[nodeAbs] ?? 0;
     const orphan = inDeg === 0;
@@ -36,6 +37,10 @@ export async function reportGraph(
       orphan,
     };
   });
+
+  if (onlyOrphans) {
+    records = records.filter(r => Boolean(r['orphan']));
+  }
 
   if (format === 'json') {
     const jsonString = JSON.stringify(records, null, 2);
@@ -111,11 +116,15 @@ export async function reportDirectories(
   graph: Graph,
   outPath: string,
   projectRoot: string,
-  format?: 'json' | 'csv'
+  format?: 'json' | 'csv',
+  onlyOrphans?: boolean
 ): Promise<string | undefined> {
   if (!format) return undefined;
 
-  const records = computeDirectoryRecords(graph, projectRoot);
+  let records = computeDirectoryRecords(graph, projectRoot);
+  if (onlyOrphans) {
+    records = records.filter(r => r.orphan);
+  }
 
   if (format === 'json') {
     const jsonString = JSON.stringify(records, null, 2);
