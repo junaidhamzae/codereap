@@ -39,7 +39,6 @@ program
     'Output file path for the report (without extension)',
     'codereap-report'
   )
-  .option('--pretty', 'Prettify JSON output')
   .option('--config <path>', 'Path to codereap.config.json (optional)')
   .option(
     '--importRoot <path>',
@@ -48,6 +47,10 @@ program
   .option(
     '--alias <mapping>',
     'Alias mapping pattern=target; repeat or comma-separate (e.g. "@/*=src/*,components/*=src/components/*")'
+  )
+  .option(
+    '--format <type>',
+    'Output format: json or csv (omit to skip writing files)'
   )
   .parse(process.argv);
 
@@ -81,12 +84,18 @@ async function main() {
     }
   }
 
-  const cliImportRoot = options.importRoot ? path.resolve(root, options.importRoot) : undefined;
-  const { root: mergedRoot, importRoot, paths } = mergeResolutionOptions(
+  const cliImportRoot = options.importRoot
+    ? path.resolve(root, options.importRoot)
+    : undefined;
+  const {
+    root: mergedRoot,
+    importRoot,
+    paths,
+  } = mergeResolutionOptions(
     root,
     { importRoot: cliImportRoot, paths: cliPaths },
     { importRoot: fileCfg.importRoot, paths: fileCfg.paths },
-    tsjs,
+    tsjs
   );
 
   // Also collect tsconfig rootDir/outDir for mapping built to source files
@@ -95,8 +104,12 @@ async function main() {
   if (fs.existsSync(tsconfigPath)) {
     const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
     if (tsconfig.compilerOptions) {
-      rootDir = tsconfig.compilerOptions.rootDir ? path.join(root, tsconfig.compilerOptions.rootDir) : undefined;
-      outDir = tsconfig.compilerOptions.outDir ? path.join(root, tsconfig.compilerOptions.outDir) : undefined;
+      rootDir = tsconfig.compilerOptions.rootDir
+        ? path.join(root, tsconfig.compilerOptions.rootDir)
+        : undefined;
+      outDir = tsconfig.compilerOptions.outDir
+        ? path.join(root, tsconfig.compilerOptions.outDir)
+        : undefined;
     }
   }
 
@@ -105,19 +118,25 @@ async function main() {
   if (fs.existsSync(packageJsonPath)) {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const main = packageJson.main ? [path.resolve(root, packageJson.main)] : [];
-    const module = packageJson.module ? [path.resolve(root, packageJson.module)] : [];
-    const bin = packageJson.bin ? Object.values(packageJson.bin).map(p => path.resolve(root, p)) : [];
-    
+    const module = packageJson.module
+      ? [path.resolve(root, packageJson.module)]
+      : [];
+    const bin = packageJson.bin
+      ? Object.values(packageJson.bin).map((p) => path.resolve(root, p))
+      : [];
+
     const rawEntrypoints = [...main, ...module, ...bin];
-    entrypoints = rawEntrypoints.map(p => {
-      if (rootDir && outDir && p.includes(outDir)) {
-        const sourceFile = p.replace(outDir, rootDir).replace('.js', '.ts');
-        if(fs.existsSync(sourceFile)) return sourceFile;
-      }
-      return p;
-    }).filter(Boolean);
+    entrypoints = rawEntrypoints
+      .map((p) => {
+        if (rootDir && outDir && p.includes(outDir)) {
+          const sourceFile = p.replace(outDir, rootDir).replace('.js', '.ts');
+          if (fs.existsSync(sourceFile)) return sourceFile;
+        }
+        return p;
+      })
+      .filter(Boolean);
   }
-  
+
   console.log('Project Source Entrypoints:', entrypoints);
 
   console.log(`Scanning for source files...`);
@@ -136,7 +155,6 @@ async function main() {
     }
   }
 
-
   console.log('Parsing files and building dependency graph...');
   const allFilesToParse = [...files];
   // Also parse the JS entrypoint
@@ -146,35 +164,46 @@ async function main() {
     }
   }
 
-
   await Promise.all(
     allFilesToParse.map(async (file) => {
       const { imports } = await parseFile(file);
       for (const imp of imports) {
-        let resolved = resolveImport(file, imp, { root: mergedRoot, importRoot, paths });
+        let resolved = resolveImport(file, imp, {
+          root: mergedRoot,
+          importRoot,
+          paths,
+        });
         if (resolved) {
           if (rootDir && outDir && resolved.includes(outDir)) {
-            const sourceFile = resolved.replace(outDir, rootDir).replace('.js', '.ts');
-            if(fs.existsSync(sourceFile)) resolved = sourceFile;
+            const sourceFile = resolved
+              .replace(outDir, rootDir)
+              .replace('.js', '.ts');
+            if (fs.existsSync(sourceFile)) resolved = sourceFile;
           }
 
           if (graph.nodes.has(resolved)) {
-             graph.addEdge(file, resolved);
+            graph.addEdge(file, resolved);
           }
         }
       }
     })
   );
 
-  console.log('Generating report...');
-  await reportGraph(graph, options.out, options.pretty);
-  console.log(`Report generated at ${options.out}.json and ${options.out}.csv`);
+  if (options.format === 'json' || options.format === 'csv') {
+    console.log('Generating report...');
+    const writtenPath = await reportGraph(
+      graph,
+      options.out,
+      mergedRoot,
+      options.format
+    );
+    console.log(`Report generated at ${writtenPath}`);
+  }
 
   console.log('Finding orphans...');
   const orphans = findOrphans(graph, entrypoints, exclude);
-  console.log('Orphan files:');
-  orphans.forEach(orphan => console.log(orphan));
-  
+  console.log(`Orphan files count: ${orphans.length}`);
+
   console.log('Done.');
 }
 

@@ -38,22 +38,30 @@ codereap [options]
 | `--extensions` | Comma-separated list of file extensions to include          | `js,ts,jsx,tsx`                       |
 | `--exclude`    | Comma-separated list of glob patterns to exclude            | `''`                                  |
 | `--out`        | Output file path for the report (without extension)         | `codereap-report`                     |
-| `--pretty`     | Prettify JSON output                                        | `false`                               |
-| `--config`     | Path to `codereap.config.json`                               | `./codereap.config.json` if present   |
-| `--importRoot` | Directory to resolve non-relative imports from                | from ts/jsconfig or config            |
-| `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)    | from ts/jsconfig `paths` or config    |
+| `--format`     | Output format: `json` or `csv` (omit to skip writing files) | `''` (no file output)                 |
+| `--config`     | Path to `codereap.config.json`                              | `./codereap.config.json` if present   |
+| `--importRoot` | Directory to resolve non-relative imports from              | from ts/jsconfig or config            |
+| `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)   | from ts/jsconfig `paths` or config    |
 
 ### Example
 
 ```bash
-codereap --root ./src --exclude "**/__tests__/**,**/*.spec.ts" --pretty
+codereap --root ./src --exclude "**/__tests__/**,**/*.spec.ts" --format json --out codereap-report
 ```
 
-This will scan the `src` directory, ignore test files, and output a prettified `codereap-report.json` and `codereap-report.csv`.
+This scans the `src` directory, ignores test files, and writes a prettified JSON report to `codereap-report.json`.
+
+To write CSV instead:
+
+```bash
+codereap --root ./src --format csv --out codereap-report
+```
+
+Note: File paths in the JSON/CSV are relative to `--root`.
 
 ### Configuration
 
-CodeReap can read aliases and defaults from `codereap.config.json`. CLI flags override the file, which overrides `tsconfig.json`/`jsconfig.json`.
+CodeReap can read import resolution settings from `codereap.config.json`. CLI flags override the file, which overrides `tsconfig.json`/`jsconfig.json`.
 
 Example `codereap.config.json`:
 
@@ -67,16 +75,14 @@ Example `codereap.config.json`:
     "src/*": ["src/*"],
     "@/*": ["src/*"],
     "components/*": ["src/components/*"]
-  },
-  "out": "codereap-report",
-  "pretty": true
+  }
 }
 ```
 
 CLI alias examples (quote wildcards in zsh):
 
 ```bash
-codereap --alias "@/*=src/*,components/*=src/components/*" --baseUrl ./src
+codereap --alias "@/*=src/*,components/*=src/components/*" --importRoot ./src
 codereap --alias "src/*=src/*" --root .
 ```
 
