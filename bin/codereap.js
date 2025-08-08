@@ -9,18 +9,24 @@ const {
   resolveImport,
   Graph,
   reportGraph,
-  findOrphans
+  findOrphans,
+  loadCodereapConfig,
+  loadTsJsConfig,
+  mergeResolutionOptions
 } = require('../dist/index');
 
 const program = new Command();
 
 program
-  .version('0.1.0')
+  .version('0.2.0')
   .option('--root <path>', 'Root directory of the project to scan', process.cwd())
   .option('--extensions <extensions>', 'Comma-separated list of file extensions to include', 'js,ts,jsx,tsx')
   .option('--exclude <patterns>', 'Comma-separated list of glob patterns to exclude')
   .option('--out <path>', 'Output file path for the report (without extension)', 'codereap-report')
   .option('--pretty', 'Prettify JSON output')
+  .option('--config <path>', 'Path to codereap.config.json (optional)')
+  .option('--baseUrl <path>', 'Base directory for non-relative imports (overrides ts/jsconfig and file config)')
+  .option('--alias <mapping>', 'Alias mapping pattern=target; repeat or comma-separate (e.g. "@/*=src/*,components/*=src/components/*")')
   .parse(process.argv);
 
 const options = program.opts();
@@ -30,6 +36,38 @@ async function main() {
   const extensions = options.extensions.split(',');
   const exclude = options.exclude ? options.exclude.split(',') : [];
 
+  // Load ts/jsconfig baseUrl & paths
+  const tsjs = loadTsJsConfig(root);
+
+  // Load codereap.config.json
+  const fileCfg = loadCodereapConfig(root, options.config);
+
+  // Parse CLI alias mappings into paths-style object
+  let cliPaths = undefined;
+  if (options.alias) {
+    const chunks = String(options.alias).split(',');
+    cliPaths = {};
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim();
+      if (!trimmed) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const pattern = trimmed.slice(0, eq).trim();
+      const target = trimmed.slice(eq + 1).trim();
+      if (!pattern || !target) continue;
+      cliPaths[pattern] = [target];
+    }
+  }
+
+  const cliBaseUrl = options.baseUrl ? path.resolve(root, options.baseUrl) : undefined;
+  const { root: mergedRoot, baseUrl, paths } = mergeResolutionOptions(
+    root,
+    { baseUrl: cliBaseUrl, paths: cliPaths },
+    { baseUrl: fileCfg.baseUrl, paths: fileCfg.paths },
+    tsjs,
+  );
+
+  // Also collect tsconfig rootDir/outDir for mapping built to source files
   const tsconfigPath = path.join(root, 'tsconfig.json');
   let rootDir, outDir;
   if (fs.existsSync(tsconfigPath)) {
@@ -61,7 +99,7 @@ async function main() {
   console.log('Project Source Entrypoints:', entrypoints);
 
   console.log(`Scanning for source files...`);
-  const files = await scanFiles(root, extensions, exclude, rootDir);
+  const files = await scanFiles(mergedRoot, extensions, exclude, rootDir);
   const sourceFiles = new Set(files);
   console.log(`Found ${files.length} source files.`);
 
@@ -91,7 +129,7 @@ async function main() {
     allFilesToParse.map(async (file) => {
       const { imports } = await parseFile(file);
       for (const imp of imports) {
-        let resolved = resolveImport(file, imp);
+        let resolved = resolveImport(file, imp, { root: mergedRoot, baseUrl, paths });
         if (resolved) {
           if (rootDir && outDir && resolved.includes(outDir)) {
             const sourceFile = resolved.replace(outDir, rootDir).replace('.js', '.ts');

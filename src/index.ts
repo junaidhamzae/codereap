@@ -4,4 +4,5 @@ export * from './resolver';
 export * from './grapher';
 export * from './reporter';
 export * from './pruner';
+export * from './config';
 

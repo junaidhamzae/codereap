@@ -39,6 +39,9 @@ codereap [options]
 | `--exclude`    | Comma-separated list of glob patterns to exclude            | `''`                                  |
 | `--out`        | Output file path for the report (without extension)         | `codereap-report`                     |
 | `--pretty`     | Prettify JSON output                                        | `false`                               |
+| `--config`     | Path to `codereap.config.json`                               | `./codereap.config.json` if present   |
+| `--baseUrl`    | Base directory for non-relative imports                      | from ts/jsconfig or config            |
+| `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)    | from ts/jsconfig `paths` or config    |
 
 ### Example
 
@@ -47,6 +50,35 @@ codereap --root ./src --exclude "**/__tests__/**,**/*.spec.ts" --pretty
 ```
 
 This will scan the `src` directory, ignore test files, and output a prettified `codereap-report.json` and `codereap-report.csv`.
+
+### Configuration
+
+CodeReap can read aliases and defaults from `codereap.config.json`. CLI flags override the file, which overrides `tsconfig.json`/`jsconfig.json`.
+
+Example `codereap.config.json`:
+
+```json
+{
+  "root": ".",
+  "extensions": ["js", "ts", "jsx", "tsx"],
+  "exclude": ["**/__tests__/**", "**/*.spec.ts"],
+  "baseUrl": "src",
+  "aliases": {
+    "src/*": ["src/*"],
+    "@/*": ["src/*"],
+    "components/*": ["src/components/*"]
+  },
+  "out": "codereap-report",
+  "pretty": true
+}
+```
+
+CLI alias examples (quote wildcards in zsh):
+
+```bash
+codereap --alias "@/*=src/*,components/*=src/components/*" --baseUrl ./src
+codereap --alias "src/*=src/*" --root .
+```
 
 ## Contributing
 
