@@ -28,7 +28,7 @@ program
   .option(
     '--extensions <extensions>',
     'Comma-separated list of file extensions to include',
-    'js,ts,jsx,tsx'
+    'js,ts,jsx,tsx,json,css,scss'
   )
   .option(
     '--exclude <patterns>',
@@ -58,14 +58,30 @@ const options = program.opts();
 
 async function main() {
   const root = path.resolve(options.root);
-  const extensions = options.extensions.split(',');
-  const exclude = options.exclude ? options.exclude.split(',') : [];
+
+  const getSrc = (name) => program.getOptionValueSource(name);
 
   // Load ts/jsconfig baseUrl & paths
   const tsjs = loadTsJsConfig(root);
 
   // Load codereap.config.json
   const fileCfg = loadCodereapConfig(root, options.config);
+
+  const extensions =
+    getSrc('extensions') === 'cli'
+      ? options.extensions.split(',')
+      : Array.isArray(fileCfg.extensions) && fileCfg.extensions.length > 0
+      ? fileCfg.extensions
+      : options.extensions.split(',');
+
+  const exclude =
+    getSrc('exclude') === 'cli'
+      ? options.exclude
+        ? options.exclude.split(',')
+        : []
+      : Array.isArray(fileCfg.exclude)
+      ? fileCfg.exclude
+      : [];
 
   // Parse CLI alias mappings into paths-style object
   let cliPaths = undefined;
@@ -189,13 +205,18 @@ async function main() {
     })
   );
 
-  if (options.format === 'json' || options.format === 'csv') {
+  const effectiveFormat =
+    getSrc('format') === 'cli' ? options.format : fileCfg.format;
+  const effectiveOut =
+    getSrc('out') === 'cli' ? options.out : fileCfg.out || options.out;
+
+  if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
     const writtenPath = await reportGraph(
       graph,
-      options.out,
+      effectiveOut,
       mergedRoot,
-      options.format
+      effectiveFormat
     );
     console.log(`Report generated at ${writtenPath}`);
   }

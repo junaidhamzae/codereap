@@ -8,7 +8,7 @@ export interface CodereapConfig {
   importRoot?: string;
   aliases?: Record<string, string | string[]>;
   out?: string;
-  pretty?: boolean;
+  format?: 'json' | 'csv';
 }
 
 export interface LoadedConfig {
@@ -18,7 +18,7 @@ export interface LoadedConfig {
   importRoot?: string; // absolute path
   paths?: Record<string, string[]>; // tsconfig-like
   out: string;
-  pretty: boolean;
+  format?: 'json' | 'csv';
 }
 
 export interface TsJsConfig {
@@ -26,7 +26,7 @@ export interface TsJsConfig {
   paths?: Record<string, string[]>;
 }
 
-const DEFAULT_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx'];
+const DEFAULT_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'json', 'css', 'scss'];
 
 export function loadCodereapConfig(root: string, explicitPath?: string): LoadedConfig {
   const rootAbs = path.resolve(root);
@@ -70,7 +70,7 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     importRoot: importRootAbs,
     paths,
     out: data.out || 'codereap-report',
-    pretty: Boolean(data.pretty),
+    format: data.format === 'json' || data.format === 'csv' ? data.format : undefined,
   };
 }
 

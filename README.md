@@ -9,7 +9,7 @@ CodeReap is a command-line tool that scans your codebase, builds a dependency gr
 
 ## What it does
 
-1.  **Scans**: Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`).
+1.  **Scans**: Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss`).
 2.  **Parses**: Uses AST (Abstract Syntax Tree) parsing to identify all `import` and `export` statements.
 3.  **Graphs**: Builds a directed graph of all dependencies between your files.
 4.  **Reports & Prunes**: Identifies all nodes in the graph with an in-degree of zero—these are your orphan files.
@@ -35,7 +35,7 @@ codereap [options]
 | Flag           | Description                                                 | Default                               |
 | -------------- | ----------------------------------------------------------- | ------------------------------------- |
 | `--root`       | Root directory of the project to scan                       | `process.cwd()`                       |
-| `--extensions` | Comma-separated list of file extensions to include          | `js,ts,jsx,tsx`                       |
+| `--extensions` | Comma-separated list of file extensions to include          | `js,ts,jsx,tsx,json,css,scss`         |
 | `--exclude`    | Comma-separated list of glob patterns to exclude            | `''`                                  |
 | `--out`        | Output file path for the report (without extension)         | `codereap-report`                     |
 | `--format`     | Output format: `json` or `csv` (omit to skip writing files) | `''` (no file output)                 |
@@ -62,20 +62,22 @@ Note: File paths in the JSON/CSV are relative to `--root`.
 ### Configuration
 
 CodeReap can read import resolution settings from `codereap.config.json`. CLI flags override the file, which overrides `tsconfig.json`/`jsconfig.json`.
+You can also set `format` here (`"json"` or `"csv"`) to control report output when you don't pass `--format`.
 
 Example `codereap.config.json`:
 
 ```json
 {
   "root": ".",
-  "extensions": ["js", "ts", "jsx", "tsx"],
+  "extensions": ["js", "ts", "jsx", "tsx", "json", "css", "scss"],
   "exclude": ["**/__tests__/**", "**/*.spec.ts"],
   "importRoot": "src",
   "aliases": {
     "src/*": ["src/*"],
     "@/*": ["src/*"],
     "components/*": ["src/components/*"]
-  }
+  },
+  "format": "json"
 }
 ```
 

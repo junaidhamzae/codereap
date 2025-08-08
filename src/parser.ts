@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import path from 'path';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
 import { ImportDeclaration, CallExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration } from '@babel/types';
@@ -14,6 +15,13 @@ export async function parseFile(filePath: string): Promise<ParsedFile> {
   const imports: string[] = [];
   const exports: string[] = [];
   const dynamicImports: string[] = [];
+
+  // Skip AST parsing for non-JS/TS files that we still want to include as nodes
+  const ext = path.extname(filePath).toLowerCase();
+  const isScript = ['.js', '.jsx', '.ts', '.tsx'].includes(ext);
+  if (!isScript) {
+    return { imports, exports, dynamicImports };
+  }
 
   const ast = babelParser.parse(content, {
     sourceType: 'module',
