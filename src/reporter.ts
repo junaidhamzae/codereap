@@ -62,3 +62,83 @@ export async function reportGraph(
   return undefined;
 }
 
+export type DirectoryRecord = {
+  directory: string;
+  'file-count': number;
+  'external-in-degree': number;
+  orphan: boolean;
+};
+
+export function computeDirectoryRecords(graph: Graph, projectRoot: string): DirectoryRecord[] {
+  const dirOf = (absPath: string): string => {
+    const relDir = path.relative(projectRoot, path.dirname(absPath)) || '.';
+    return relDir;
+  };
+
+  const fileCount: Record<string, number> = Object.create(null);
+  const externalIn: Record<string, number> = Object.create(null);
+
+  for (const node of graph.nodes) {
+    const d = dirOf(node);
+    fileCount[d] = (fileCount[d] || 0) + 1;
+    if (!(d in externalIn)) externalIn[d] = 0;
+  }
+
+  for (const [from, to] of graph.edges) {
+    const fromDir = dirOf(from);
+    const toDir = dirOf(to);
+    if (fromDir !== toDir) {
+      externalIn[toDir] = (externalIn[toDir] || 0) + 1;
+    }
+  }
+
+  const allDirs = Object.keys(fileCount);
+  const records: DirectoryRecord[] = allDirs.map((directory) => {
+    const fc = fileCount[directory] || 0;
+    const inDeg = externalIn[directory] || 0;
+    return {
+      directory,
+      'file-count': fc,
+      'external-in-degree': inDeg,
+      orphan: fc > 0 && inDeg === 0,
+    };
+  });
+
+  return records;
+}
+
+export async function reportDirectories(
+  graph: Graph,
+  outPath: string,
+  projectRoot: string,
+  format?: 'json' | 'csv'
+): Promise<string | undefined> {
+  if (!format) return undefined;
+
+  const records = computeDirectoryRecords(graph, projectRoot);
+
+  if (format === 'json') {
+    const jsonString = JSON.stringify(records, null, 2);
+    const jsonPath = `${outPath}.json`;
+    await fs.writeFile(jsonPath, jsonString);
+    return jsonPath;
+  }
+
+  if (format === 'csv') {
+    const csvPath = `${outPath}.csv`;
+    const csvWriter = createObjectCsvWriter({
+      path: csvPath,
+      header: [
+        { id: 'directory', title: 'directory' },
+        { id: 'file-count', title: 'file-count' },
+        { id: 'external-in-degree', title: 'external-in-degree' },
+        { id: 'orphan', title: 'orphan' },
+      ],
+    });
+    await csvWriter.writeRecords(records);
+    return csvPath;
+  }
+
+  return undefined;
+}
+

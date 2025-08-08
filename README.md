@@ -42,6 +42,7 @@ codereap [options]
 | `--config`     | Path to `codereap.config.json`                              | `./codereap.config.json` if present   |
 | `--importRoot` | Directory to resolve non-relative imports from              | from ts/jsconfig or config            |
 | `--alias`      | Alias mapping `pattern=target` (repeat or comma-separate)   | from ts/jsconfig `paths` or config    |
+| `--dirOnly`    | Aggregate per-directory and report orphan directories       | off                                   |
 
 ### Example
 
@@ -57,7 +58,30 @@ To write CSV instead:
 codereap --root ./src --format csv --out codereap-report
 ```
 
-Note: File paths in the JSON/CSV are relative to `--root`.
+Directory-only mode (report orphan directories):
+
+```bash
+codereap --root ./src --dirOnly --format json --out codereap-dirs
+```
+
+Notes:
+- Writing a file happens only when `--format` is provided.
+- All paths in reports are relative to `--root`.
+- JSON output is always pretty-printed.
+
+### Report schemas
+
+- File mode (default): each row/object represents a file
+  - `node`: path to the file relative to `--root`
+  - `exists`: always `true` (present in the scan)
+  - `in-degree`: number of other files that import this file
+  - `orphan`: `true` when `in-degree === 0`
+
+- Directory mode (`--dirOnly`): each row/object represents a directory
+  - `directory`: directory path relative to `--root`
+  - `file-count`: number of files in that directory included in the scan
+  - `external-in-degree`: count of imports coming from outside this directory
+  - `orphan`: `true` when `file-count > 0` and `external-in-degree === 0`
 
 ### Configuration
 

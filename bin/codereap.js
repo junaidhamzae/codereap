@@ -4,16 +4,17 @@ const { Command } = require('commander');
 const path = require('path');
 const fs = require('fs');
 const pkg = require('../package.json');
-const { 
+const {
   scanFiles,
   parseFile,
   resolveImport,
   Graph,
   reportGraph,
+  reportDirectories,
   findOrphans,
   loadCodereapConfig,
   loadTsJsConfig,
-  mergeResolutionOptions
+  mergeResolutionOptions,
 } = require('../dist/index');
 
 const program = new Command();
@@ -51,6 +52,10 @@ program
   .option(
     '--format <type>',
     'Output format: json or csv (omit to skip writing files)'
+  )
+  .option(
+    '--dirOnly',
+    'Aggregate at directory level and report orphan directories'
   )
   .parse(process.argv);
 
@@ -212,18 +217,31 @@ async function main() {
 
   if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
-    const writtenPath = await reportGraph(
-      graph,
-      effectiveOut,
-      mergedRoot,
-      effectiveFormat
-    );
+    const writtenPath = options.dirOnly
+      ? await reportDirectories(
+          graph,
+          effectiveOut,
+          mergedRoot,
+          effectiveFormat
+        )
+      : await reportGraph(graph, effectiveOut, mergedRoot, effectiveFormat);
     console.log(`Report generated at ${writtenPath}`);
   }
 
-  console.log('Finding orphans...');
-  const orphans = findOrphans(graph, entrypoints, exclude);
-  console.log(`Orphan files count: ${orphans.length}`);
+  if (options.dirOnly) {
+    console.log('Finding orphan directories...');
+    // Count directories with orphan=true
+    const dirRecords = require('../dist/reporter').computeDirectoryRecords(
+      graph,
+      mergedRoot
+    );
+    const orphanDirs = dirRecords.filter((r) => r.orphan);
+    console.log(`Orphan directories count: ${orphanDirs.length}`);
+  } else {
+    console.log('Finding orphans...');
+    const orphans = findOrphans(graph, entrypoints, exclude);
+    console.log(`Orphan files count: ${orphans.length}`);
+  }
 
   console.log('Done.');
 }
