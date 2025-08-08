@@ -3,6 +3,7 @@
 const { Command } = require('commander');
 const path = require('path');
 const fs = require('fs');
+const pkg = require('../package.json');
 const { 
   scanFiles,
   parseFile,
@@ -18,15 +19,36 @@ const {
 const program = new Command();
 
 program
-  .version('0.2.0')
-  .option('--root <path>', 'Root directory of the project to scan', process.cwd())
-  .option('--extensions <extensions>', 'Comma-separated list of file extensions to include', 'js,ts,jsx,tsx')
-  .option('--exclude <patterns>', 'Comma-separated list of glob patterns to exclude')
-  .option('--out <path>', 'Output file path for the report (without extension)', 'codereap-report')
+  .version(pkg.version)
+  .option(
+    '--root <path>',
+    'Root directory of the project to scan',
+    process.cwd()
+  )
+  .option(
+    '--extensions <extensions>',
+    'Comma-separated list of file extensions to include',
+    'js,ts,jsx,tsx'
+  )
+  .option(
+    '--exclude <patterns>',
+    'Comma-separated list of glob patterns to exclude'
+  )
+  .option(
+    '--out <path>',
+    'Output file path for the report (without extension)',
+    'codereap-report'
+  )
   .option('--pretty', 'Prettify JSON output')
   .option('--config <path>', 'Path to codereap.config.json (optional)')
-  .option('--baseUrl <path>', 'Base directory for non-relative imports (overrides ts/jsconfig and file config)')
-  .option('--alias <mapping>', 'Alias mapping pattern=target; repeat or comma-separate (e.g. "@/*=src/*,components/*=src/components/*")')
+  .option(
+    '--baseUrl <path>',
+    'Base directory for non-relative imports (overrides ts/jsconfig and file config)'
+  )
+  .option(
+    '--alias <mapping>',
+    'Alias mapping pattern=target; repeat or comma-separate (e.g. "@/*=src/*,components/*=src/components/*")'
+  )
   .parse(process.argv);
 
 const options = program.opts();
