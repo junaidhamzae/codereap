@@ -18,7 +18,10 @@
   "scripts": {
     "start": "node bin/codereap.js",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:unit": "jest tests/unit",
+    "test:cli": "npm run build && jest tests/cli"
   },
   "keywords": [
     "cli",
@@ -43,9 +46,13 @@
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
+    "@types/jest": "^30.0.0",
     "@types/micromatch": "^4.0.9",
     "@types/node": "^24.2.0",
     "@typescript-eslint/parser": "^8.39.0",
+    "jest": "^30.0.5",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
 }
