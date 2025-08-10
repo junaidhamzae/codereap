@@ -250,6 +250,59 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 ---
 
+## Local development and testing
+
+Run the TypeScript build and the full test suite locally.
+
+1) Install deps
+
+```bash
+npm install
+```
+
+2) Build
+
+```bash
+npm run build
+```
+
+3) Run unit tests
+
+```bash
+npm test
+```
+
+4) Run CLI integration tests
+
+```bash
+npm run test:cli
+```
+
+Notes:
+
+- Tests include unit tests for core logic and CLI integration tests against fixtures.
+- CLI tests use normalized and deterministic JSON output; some suites use snapshots. If snapshots change, verify the diff is intentional before updating.
+
+---
+
+## Pre‑publish checklist
+
+Before publishing a new version to npm, run the checklist script:
+
+```bash
+npm run prepublish:check
+```
+
+This will:
+
+- Build TypeScript sources
+- Run unit tests
+- Run CLI integration tests
+
+The project enforces strong coverage thresholds during tests, acting as a guard rail before publish.
+
+---
+
 ## License
 
 [MIT](LICENSE)
