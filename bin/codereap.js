@@ -68,6 +68,11 @@ program
     '--alwaysLive <globs>',
     'Comma-separated glob(s) to mark as always-live (relative to --root)'
   )
+  .option(
+    '--dynamicEdges <mode>',
+    'Treat string-literal dynamic imports as edges: on or off (default: on)',
+    'on'
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -358,6 +363,9 @@ async function main() {
     }
   }
 
+  const dynamicEdgesOn =
+    String(options.dynamicEdges || 'on').toLowerCase() !== 'off';
+
   await Promise.all(
     allFilesToParse.map(async (file) => {
       const { imports, importSpecs, exportsInfo, exportUsage } =
@@ -381,6 +389,36 @@ async function main() {
 
           if (graph.nodes.has(resolved)) {
             graph.addEdge(file, resolved);
+          }
+        }
+      }
+
+      // Add edges for string-literal dynamic imports when enabled
+      if (
+        dynamicEdgesOn &&
+        Array.isArray(importSpecs) &&
+        importSpecs.length > 0
+      ) {
+        for (const spec of importSpecs) {
+          if (!spec || spec.kind !== 'dynamic') continue;
+          let resolvedDyn = resolveImport(file, spec.source, {
+            root: mergedRoot,
+            importRoot,
+            paths,
+            extensions: extensions.map((e) =>
+              e.startsWith('.') ? e : `.${e}`
+            ),
+          });
+          if (resolvedDyn) {
+            if (rootDir && outDir && resolvedDyn.includes(outDir)) {
+              const sourceFileDyn = resolvedDyn
+                .replace(outDir, rootDir)
+                .replace('.js', '.ts');
+              if (fs.existsSync(sourceFileDyn)) resolvedDyn = sourceFileDyn;
+            }
+            if (graph.nodes.has(resolvedDyn)) {
+              graph.addEdge(file, resolvedDyn);
+            }
           }
         }
       }

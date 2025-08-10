@@ -62,6 +62,7 @@ codereap [options]
 - `--frameworkEntrypoints <auto|off>` – enable/disable framework auto‑seeding (default: `auto`)
 - `--entry <globs>` – comma‑separated glob(s) for extra entrypoints (relative to `--root`)
 - `--alwaysLive <globs>` – comma‑separated glob(s) to mark files as live regardless of traversal (relative to `--root`)
+ - `--dynamicEdges <on|off>` – treat string‑literal dynamic imports (`import('...')`) as graph edges (default: `on`)
 
 ---
 
@@ -89,6 +90,7 @@ Notes:
 - Reachability is computed from combined entrypoints (package.json + auto‑seeded + `--entry`). Files matching `--alwaysLive` are unioned into the live set after traversal.
 - In‑degree remains informational.
 - CSV output is no longer supported.
+ - String‑literal dynamic imports add edges by default to improve reachability (disable with `--dynamicEdges off`). Non‑literal dynamic imports are not resolved; use `--alwaysLive` globs for those cases.
 
 Next.js auto detection (default):
 
@@ -118,6 +120,12 @@ Generate only orphan rows with enriched import targets (JSON):
 
 ```bash
 codereap --root ./src --onlyOrphans --out codereap-orphans
+```
+
+Disable dynamic import edges (stricter pruning):
+
+```bash
+codereap --root . --dynamicEdges off --out codereap-report
 ```
 
 ---
