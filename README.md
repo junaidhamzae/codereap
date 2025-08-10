@@ -28,7 +28,7 @@ Modern codebases accumulate unused components, pages and modules over time. Thos
 - **Graph** – A directed graph is built where each file is a node and edges represent dependencies.
 - **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`), script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references), and (when enabled) framework conventions. For Next.js, route files in `pages/` or `app/` and `middleware.{js,ts}` are auto‑seeded. When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
 - **Prune (reachability)** – From entrypoints, the graph is traversed to find all live files. Files that are not reachable are marked as orphans.
-- **Report** – Results can be written to JSON or CSV. File reports include the path, an existence flag, in‑degree (incoming edges, informational) and whether it is an orphan. Directory reports aggregate counts and whether a directory is orphan.
+- **Report** – Results are written to JSON. File reports include the path, an existence flag, in‑degree (incoming edges, informational) and whether it is an orphan. Directory reports aggregate counts and whether a directory is orphan.
 
 ---
 
@@ -53,8 +53,7 @@ codereap [options]
 - `--root <path>` – root directory to scan (defaults to current working directory)
 - `--extensions <exts>` – comma‑separated list of extensions (default: `js,ts,jsx,tsx,json,css,scss`)
 - `--exclude <patterns>` – comma‑separated glob patterns to ignore (e.g. `**/__tests__/**`)
-- `--format <json|csv>` – choose JSON or CSV output; if omitted, no report file is written
-- `--out <path>` – base filename for the report (default: `codereap-report`)
+- `--out <path>` – base filename for the JSON report (default: `codereap-report.json`)
 - `--config <path>` – path to `codereap.config.json` (if present and not overridden)
 - `--importRoot <path>` – override the base directory used to resolve non‑relative imports
 - `--alias <pattern=target>` – one or more alias mappings (comma‑separate) like TypeScript `paths`
@@ -73,59 +72,52 @@ Scan the `src` folder, ignore tests and generate a prettified JSON report:
 ```bash
 codereap --root ./src \
   --exclude "**/__tests__/**,**/*.spec.ts" \
-  --format json \
   --out codereap-report
-```
-
-Write a CSV report instead:
-
-```bash
-codereap --root ./src --format csv --out codereap-report
 ```
 
 Aggregate by directory and only list orphan folders:
 
 ```bash
-codereap --dirOnly --onlyOrphans --format json --out codereap-dirs
+codereap --dirOnly --onlyOrphans --out codereap-dirs
 ```
 
 Notes:
-- Writing a file happens only when `--format` is provided.
+- A JSON report is always written to `<out>.json` (default: `codereap-report.json`).
 - All paths in reports are relative to `--root`.
 - JSON output is always pretty‑printed.
-- Symbol extraction is performed only for JSON file reports; directory mode and CSV outputs are unchanged.
 - Framework auto‑seeding currently supports Next.js (pages/, src/pages/, app/ routes, and middleware), respecting `--exclude`.
 - Reachability is computed from combined entrypoints (package.json + auto‑seeded + `--entry`). Files matching `--alwaysLive` are unioned into the live set after traversal.
 - In‑degree remains informational.
+- CSV output is no longer supported.
 
 Next.js auto detection (default):
 
 ```bash
-codereap --root . --format json --out codereap-report
+codereap --root . --out codereap-report
 ```
 
 Disable framework auto‑seeding:
 
 ```bash
-codereap --root . --frameworkEntrypoints off --format json --out codereap-report
+codereap --root . --frameworkEntrypoints off --out codereap-report
 ```
 
 Add custom entrypoints:
 
 ```bash
-codereap --root . --entry "scripts/**/*.js,src/cli/**/*.{ts,js}" --format json --out codereap-report
+codereap --root . --entry "scripts/**/*.js,src/cli/**/*.{ts,js}" --out codereap-report
 ```
 
 Mark files as always live (e.g. i18n, type defs):
 
 ```bash
-codereap --root . --alwaysLive "locales/**/*.json,**/*.d.ts" --format json --out codereap-report
+codereap --root . --alwaysLive "locales/**/*.json,**/*.d.ts" --out codereap-report
 ```
 
 Generate only orphan rows with enriched import targets (JSON):
 
 ```bash
-codereap --root ./src --format json --onlyOrphans --out codereap-orphans
+codereap --root ./src --onlyOrphans --out codereap-orphans
 ```
 
 ---
@@ -151,7 +143,7 @@ Precedence is: CLI > codereap.config.json > tsconfig/jsconfig.
     "@/*": ["src/*"],
     "components/*": ["src/components/*"]
   },
-  "format": "json"
+  
 }
 ```
 

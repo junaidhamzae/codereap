@@ -51,10 +51,6 @@ program
     'Alias mapping pattern=target; repeat or comma-separate (e.g. "@/*=src/*,components/*=src/components/*")'
   )
   .option(
-    '--format <type>',
-    'Output format: json or csv (omit to skip writing files)'
-  )
-  .option(
     '--dirOnly',
     'Aggregate at directory level and report orphan directories'
   )
@@ -104,12 +100,10 @@ async function main() {
       : [];
 
   // Determine effective output settings early (for gating symbol collection later)
-  const effectiveFormat =
-    getSrc('format') === 'cli' ? options.format : fileCfg.format;
   const effectiveOut =
     getSrc('out') === 'cli' ? options.out : fileCfg.out || options.out;
   const effectiveOnlyOrphans = options.onlyOrphans === true;
-  const collectSymbols = effectiveFormat === 'json';
+  const collectSymbols = true; // always collect for JSON output
 
   // Parse CLI alias mappings into paths-style object
   let cliPaths = undefined;
@@ -239,7 +233,10 @@ async function main() {
     }
   }
 
-  console.log('Project Source Entrypoints:', entrypoints);
+  console.log(
+    'Project Source Entrypoints (relative):',
+    entrypoints.map((p) => path.relative(root, p))
+  );
 
   // Resolve framework and user-provided entrypoint globs
   const fg = require('fast-glob');
@@ -455,7 +452,7 @@ async function main() {
     consumptionIndex = map;
   }
 
-  if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
+  {
     console.log('Generating report...');
     // Compute live files via reachability from entrypoints and apply always-live
     let liveFiles = computeLiveFiles(graph, entrypoints);
@@ -475,7 +472,6 @@ async function main() {
           graph,
           effectiveOut,
           mergedRoot,
-          effectiveFormat,
           options.onlyOrphans,
           liveFiles
         )
@@ -483,7 +479,6 @@ async function main() {
           graph,
           effectiveOut,
           mergedRoot,
-          effectiveFormat,
           options.onlyOrphans,
           liveFiles,
           collectSymbols ? fileToSymbols : undefined,
@@ -495,7 +490,8 @@ async function main() {
                   v.exportUsage || undefined,
                 ])
               )
-            : undefined
+            : undefined,
+          new Set(entrypoints)
         );
     console.log(`Report generated at ${writtenPath}`);
   }

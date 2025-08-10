@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import path from 'path';
-import { createObjectCsvWriter } from 'csv-writer';
 import { Graph } from './grapher';
 import type { ExportInfo, ImportSpecifierInfo } from './parser';
 
@@ -8,7 +7,6 @@ export async function reportGraph(
   graph: Graph,
   outPath: string,
   projectRoot: string,
-  format?: 'json' | 'csv',
   onlyOrphans?: boolean,
   liveFiles?: Set<string>,
   symbols?: Map<
@@ -37,10 +35,10 @@ export async function reportGraph(
         named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
       }
     | undefined
-  >
+  >,
+  entrypointSet?: Set<string>
 ): Promise<string | undefined> {
-  // If no format specified, do not write any file
-  if (!format) return undefined;
+  // Always write JSON
 
   // Compute in-degree for every node in the graph
   const nodes = Array.from(graph.nodes);
@@ -66,7 +64,7 @@ export async function reportGraph(
       orphan,
     };
 
-    if (format === 'json' && symbols) {
+    if (symbols) {
       const info = symbols.get(nodeAbs);
       if (info) {
         // Compute exports usage and orphan flags
@@ -144,29 +142,10 @@ export async function reportGraph(
     records = records.filter(r => Boolean(r['orphan']));
   }
 
-  if (format === 'json') {
-    const jsonString = JSON.stringify(records, null, 2);
-    const jsonPath = `${outPath}.json`;
-    await fs.writeFile(jsonPath, jsonString);
-    return jsonPath;
-  }
-
-  if (format === 'csv') {
-    const csvPath = `${outPath}.csv`;
-    const csvWriter = createObjectCsvWriter({
-      path: csvPath,
-      header: [
-        { id: 'node', title: 'node' },
-        { id: 'exists', title: 'exists' },
-        { id: 'in-degree', title: 'in-degree' },
-        { id: 'orphan', title: 'orphan' },
-      ],
-    });
-    await csvWriter.writeRecords(records);
-    return csvPath;
-  }
-
-  return undefined;
+  const jsonString = JSON.stringify(records, null, 2);
+  const jsonPath = `${outPath}.json`;
+  await fs.writeFile(jsonPath, jsonString);
+  return jsonPath;
 }
 
 export type DirectoryRecord = {
@@ -227,39 +206,19 @@ export async function reportDirectories(
   graph: Graph,
   outPath: string,
   projectRoot: string,
-  format?: 'json' | 'csv',
   onlyOrphans?: boolean,
   liveFiles?: Set<string>
 ): Promise<string | undefined> {
-  if (!format) return undefined;
+  // Always write JSON
 
   let records = computeDirectoryRecords(graph, projectRoot, liveFiles);
   if (onlyOrphans) {
     records = records.filter(r => r.orphan);
   }
 
-  if (format === 'json') {
-    const jsonString = JSON.stringify(records, null, 2);
-    const jsonPath = `${outPath}.json`;
-    await fs.writeFile(jsonPath, jsonString);
-    return jsonPath;
-  }
-
-  if (format === 'csv') {
-    const csvPath = `${outPath}.csv`;
-    const csvWriter = createObjectCsvWriter({
-      path: csvPath,
-      header: [
-        { id: 'directory', title: 'directory' },
-        { id: 'file-count', title: 'file-count' },
-        { id: 'external-in-degree', title: 'external-in-degree' },
-        { id: 'orphan', title: 'orphan' },
-      ],
-    });
-    await csvWriter.writeRecords(records);
-    return csvPath;
-  }
-
-  return undefined;
+  const jsonString = JSON.stringify(records, null, 2);
+  const jsonPath = `${outPath}.json`;
+  await fs.writeFile(jsonPath, jsonString);
+  return jsonPath;
 }
 

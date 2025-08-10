@@ -8,7 +8,6 @@ export interface CodereapConfig {
   importRoot?: string;
   aliases?: Record<string, string | string[]>;
   out?: string;
-  format?: 'json' | 'csv';
 }
 
 export interface LoadedConfig {
@@ -18,7 +17,6 @@ export interface LoadedConfig {
   importRoot?: string; // absolute path
   paths?: Record<string, string[]>; // tsconfig-like
   out: string;
-  format?: 'json' | 'csv';
 }
 
 export interface TsJsConfig {
@@ -70,7 +68,6 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     importRoot: importRootAbs,
     paths,
     out: data.out || 'codereap-report',
-    format: data.format === 'json' || data.format === 'csv' ? data.format : undefined,
   };
 }
 
