@@ -277,25 +277,55 @@ export async function parseFile(
   });
 
   if (collectSymbols) {
-    // Compute intra-file referenced flags using scope bindings when available
+    // Compute intra-file referenced flags by scanning identifiers excluding export declarations
     const namedUsage: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }> = {};
+    const publicToLocal = new Map<string, string>();
     for (const [publicName, meta] of Object.entries(exportNamedLocalMap)) {
-      let referenced = false;
-      if (meta.localName && programPathRef) {
-        const binding = (programPathRef as any).scope?.getBinding(meta.localName);
-        if (binding && Array.isArray(binding.referencePaths)) {
-          referenced = binding.referencePaths.some((p: NodePath) => !p.findParent((pp) => (pp as any).isExportNamedDeclaration && (pp as any).isExportNamedDeclaration()));
-        }
-      }
-      namedUsage[publicName] = { localName: meta.localName, referencedInFile: Boolean(referenced), reexport: meta.reexport };
+      namedUsage[publicName] = { localName: meta.localName, referencedInFile: false, reexport: meta.reexport };
+      if (meta.localName) publicToLocal.set(publicName, meta.localName);
     }
 
-    let defaultReferenced = false;
-    if (defaultLocalName && programPathRef) {
-      const binding = (programPathRef as any).scope?.getBinding(defaultLocalName);
-      if (binding && Array.isArray(binding.referencePaths)) {
-        defaultReferenced = binding.referencePaths.some((p: NodePath) => !p.findParent((pp) => (pp as any).isExportNamedDeclaration && (pp as any).isExportNamedDeclaration()));
+    const isInsideExportDecl = (p: NodePath): boolean => {
+      return Boolean(p.findParent((pp) => (pp as any).isExportNamedDeclaration?.() || (pp as any).isExportDefaultDeclaration?.()));
+    };
+    const isDeclarationId = (p: NodePath): boolean => {
+      const parent: any = p.parentPath;
+      if (!parent) return false;
+      if (parent.isFunctionDeclaration?.()) {
+        return parent.node.id === (p as any).node;
       }
+      if (parent.isClassDeclaration?.()) {
+        return parent.node.id === (p as any).node;
+      }
+      if (parent.isVariableDeclarator?.()) {
+        return parent.node.id === (p as any).node;
+      }
+      return false;
+    };
+
+    traverse(ast, {
+      Identifier(idPath: NodePath<Identifier>) {
+        if (isInsideExportDecl(idPath) || isDeclarationId(idPath)) return;
+        const name = idPath.node.name;
+        for (const [publicName, local] of publicToLocal.entries()) {
+          if (local === name) {
+            namedUsage[publicName].referencedInFile = true;
+          }
+        }
+        if (defaultLocalName && name === defaultLocalName && !isInsideExportDecl(idPath) && !isDeclarationId(idPath)) {
+          // handled below via defaultReferenced, but we can mark a flag here
+        }
+      },
+    });
+
+    let defaultReferenced = false;
+    if (defaultLocalName) {
+      traverse(ast, {
+        Identifier(idPath: NodePath<Identifier>) {
+          if (isInsideExportDecl(idPath) || isDeclarationId(idPath)) return;
+          if (idPath.node.name === defaultLocalName) defaultReferenced = true;
+        },
+      });
     }
 
     const exportUsage = {
