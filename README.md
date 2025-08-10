@@ -23,7 +23,7 @@ Modern codebases accumulate unused components, pages and modules over time. Thos
 
 - **Scan** – Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss` by default). You can customise the set of extensions to include.
 - **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. Other file types are still represented as nodes.
-- **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. For JSON file reports, CodeReap also collects exported symbols and per‑import specifiers for orphan files. Other file types are still represented as nodes.
+- **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. For JSON file reports, CodeReap also collects exported symbols for all files and per‑import specifiers for orphan files. Other file types are still represented as nodes.
 - **Resolve** – Imports are resolved using relative paths, `baseUrl`/`paths` mappings from `tsconfig.json` or `jsconfig.json`, custom alias patterns and an optional `importRoot`. Node.js resolution is used as a last resort.
 - **Graph** – A directed graph is built where each file is a node and edges represent dependencies.
 - **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`) and script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references). When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
@@ -151,18 +151,18 @@ When you run CodeReap without `--dirOnly`, each row in the report represents a f
 - `in‑degree` – number of other files that import it (informational)
 - `orphan` – `true` if the file is not reachable from any entry point
 
-When writing JSON file reports, orphan rows include a `symbols` object with:
+When writing JSON file reports:
 
-- `symbols.exports` – exported symbols from the orphan file:
-  - `hasDefault` (boolean)
-  - `named` (string[])
-  - `reExports` (Array of `{ source, named?, star? }`)
-- `symbols.imports` – per‑import specifiers used by the orphan file. Each item has:
+- All rows include `symbols.exports` (per‑export usage):
+  - `default`: `{ exists: boolean, referencedInFile: boolean, orphan: boolean }`
+  - `named`: `Array<{ name: string, referencedInFile: boolean, orphan: boolean, reexport?: boolean }>`
+  - `reExports`: `Array<{ source: string, named?: string[], star?: boolean }>` (informational)
+- Only orphan rows include `symbols.imports`. Each item has:
   - `source` (string) – as written in code
   - `resolved` (string, optional) – root‑relative path when resolvable into the scanned graph
   - `kind` (`'esm'|'cjs'|'dynamic'`)
   - `imported` – `{ default: boolean, named: string[], namespace: boolean }`
-  - When using `--onlyOrphans` (JSON), if `resolved` points to a scanned file, a `target` is included with `{ node, exports }` summarising that file’s exports.
+  - With `--onlyOrphans` (JSON), if `resolved` points to a scanned file, a `target` is included with `{ node, exports }` summarising that file’s exports.
 
 Example orphan row (JSON):
 
@@ -173,7 +173,14 @@ Example orphan row (JSON):
   "in-degree": 0,
   "orphan": true,
   "symbols": {
-    "exports": { "hasDefault": false, "named": ["add", "sub"], "reExports": [] },
+    "exports": {
+      "default": { "exists": false, "referencedInFile": false, "orphan": true },
+      "named": [
+        { "name": "add", "referencedInFile": false, "orphan": false },
+        { "name": "sub", "referencedInFile": false, "orphan": true }
+      ],
+      "reExports": []
+    },
     "imports": [
       {
         "source": "./consts",

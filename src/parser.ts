@@ -11,7 +11,9 @@ import {
   VariableDeclarator,
   ObjectPattern,
   Identifier,
+  Program,
 } from '@babel/types';
+import type { NodePath } from '@babel/traverse';
 
 export type ImportKind = 'esm' | 'cjs' | 'dynamic';
 
@@ -44,6 +46,10 @@ export interface ParsedFile {
   // Optional details when symbol collection is enabled
   importSpecs?: ImportSpecifierInfo[];
   exportsInfo?: ExportInfo;
+  exportUsage?: {
+    default?: { exists: boolean; localName?: string; referencedInFile: boolean };
+    named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
+  };
 }
 
 export async function parseFile(
@@ -57,6 +63,9 @@ export async function parseFile(
   const collectSymbols = Boolean(opts && opts.collectSymbols);
   const importSpecs: ImportSpecifierInfo[] = [];
   const exportsInfo: ExportInfo = { hasDefault: false, named: [], reExports: [] };
+  const exportNamedLocalMap: Record<string, { localName?: string; reexport?: boolean }> = {};
+  let defaultLocalName: string | undefined = undefined;
+  let programPathRef: NodePath<Program> | undefined;
 
   // Skip AST parsing for non-JS/TS files that we still want to include as nodes
   const ext = path.extname(filePath).toLowerCase();
@@ -77,6 +86,9 @@ export async function parseFile(
   });
 
   traverse(ast, {
+    Program(path: NodePath<Program>) {
+      programPathRef = path;
+    },
     ImportDeclaration(path: { node: ImportDeclaration }) {
       const src = path.node.source.value;
       imports.push(src);
@@ -188,7 +200,16 @@ export async function parseFile(
     },
     ExportDefaultDeclaration(path: { node: ExportDefaultDeclaration }) {
       exports.push('default');
-      if (collectSymbols) exportsInfo.hasDefault = true;
+      if (collectSymbols) {
+        exportsInfo.hasDefault = true;
+        // Try to capture a local binding name when present
+        const decl: any = path.node.declaration as any;
+        if (decl && (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id && decl.id.type === 'Identifier') {
+          defaultLocalName = decl.id.name;
+        } else if (decl && decl.type === 'Identifier') {
+          defaultLocalName = decl.name;
+        }
+      }
     },
     ExportNamedDeclaration(path: { node: ExportNamedDeclaration }) {
       if (path.node.source) {
@@ -201,6 +222,7 @@ export async function parseFile(
             path.node.specifiers.forEach((specifier) => {
               if (specifier.exported.type === 'Identifier') {
                 names.push(specifier.exported.name);
+                exportNamedLocalMap[specifier.exported.name] = { reexport: true };
               }
             });
           }
@@ -211,7 +233,17 @@ export async function parseFile(
         path.node.specifiers.forEach((specifier) => {
           if (specifier.exported.type === 'Identifier') {
             exports.push(specifier.exported.name);
-            if (collectSymbols) exportsInfo.named.push(specifier.exported.name);
+            if (collectSymbols) {
+              exportsInfo.named.push(specifier.exported.name);
+              if ((specifier as any).local && (specifier as any).local.type === 'Identifier') {
+                exportNamedLocalMap[specifier.exported.name] = {
+                  localName: (specifier as any).local.name,
+                  reexport: false,
+                };
+              } else if (!(specifier as any).local) {
+                // no local means it's part of a re-export already handled
+              }
+            }
           }
         });
       }
@@ -221,7 +253,10 @@ export async function parseFile(
             if ((declaration.id as any).type === 'Identifier') {
               const name = (declaration.id as Identifier).name;
               exports.push(name);
-              if (collectSymbols) exportsInfo.named.push(name);
+              if (collectSymbols) {
+                exportsInfo.named.push(name);
+                exportNamedLocalMap[name] = { localName: name, reexport: false };
+              }
             }
           });
         } else if (
@@ -231,7 +266,10 @@ export async function parseFile(
           if (path.node.declaration.id) {
             const name = path.node.declaration.id.name;
             exports.push(name);
-            if (collectSymbols) exportsInfo.named.push(name);
+            if (collectSymbols) {
+              exportsInfo.named.push(name);
+              exportNamedLocalMap[name] = { localName: name, reexport: false };
+            }
           }
         }
       }
@@ -239,7 +277,33 @@ export async function parseFile(
   });
 
   if (collectSymbols) {
-    return { imports, exports, dynamicImports, importSpecs, exportsInfo };
+    // Compute intra-file referenced flags using scope bindings when available
+    const namedUsage: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }> = {};
+    for (const [publicName, meta] of Object.entries(exportNamedLocalMap)) {
+      let referenced = false;
+      if (meta.localName && programPathRef) {
+        const binding = (programPathRef as any).scope?.getBinding(meta.localName);
+        if (binding && Array.isArray(binding.referencePaths)) {
+          referenced = binding.referencePaths.some((p: NodePath) => !p.findParent((pp) => (pp as any).isExportNamedDeclaration && (pp as any).isExportNamedDeclaration()));
+        }
+      }
+      namedUsage[publicName] = { localName: meta.localName, referencedInFile: Boolean(referenced), reexport: meta.reexport };
+    }
+
+    let defaultReferenced = false;
+    if (defaultLocalName && programPathRef) {
+      const binding = (programPathRef as any).scope?.getBinding(defaultLocalName);
+      if (binding && Array.isArray(binding.referencePaths)) {
+        defaultReferenced = binding.referencePaths.some((p: NodePath) => !p.findParent((pp) => (pp as any).isExportNamedDeclaration && (pp as any).isExportNamedDeclaration()));
+      }
+    }
+
+    const exportUsage = {
+      default: exportsInfo.hasDefault ? { exists: true, localName: defaultLocalName, referencedInFile: defaultReferenced } : undefined,
+      named: namedUsage,
+    };
+
+    return { imports, exports, dynamicImports, importSpecs, exportsInfo, exportUsage };
   }
   return { imports, exports, dynamicImports };
 }

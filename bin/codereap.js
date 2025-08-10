@@ -256,9 +256,10 @@ async function main() {
 
   await Promise.all(
     allFilesToParse.map(async (file) => {
-      const { imports, importSpecs, exportsInfo } = await parseFile(file, {
-        collectSymbols,
-      });
+      const { imports, importSpecs, exportsInfo, exportUsage } =
+        await parseFile(file, {
+          collectSymbols,
+        });
       for (const imp of imports) {
         let resolved = resolveImport(file, imp, {
           root: mergedRoot,
@@ -313,10 +314,39 @@ async function main() {
             reExports: [],
           },
           importSpecs: enriched,
+          exportUsage,
         });
       }
     })
   );
+
+  // Build cross-file consumption index for exported symbols (JSON mode only)
+  let consumptionIndex = undefined;
+  if (collectSymbols) {
+    const map = new Map();
+    for (const [, info] of fileToSymbols.entries()) {
+      const specs = info.importSpecs || [];
+      for (const spec of specs) {
+        if (!spec || !spec.resolved) continue;
+        if (spec.kind === 'dynamic') continue;
+        const key = spec.resolved;
+        if (!map.has(key)) {
+          map.set(key, {
+            defaultConsumed: false,
+            namespaceConsumed: false,
+            namedConsumed: new Set(),
+          });
+        }
+        const entry = map.get(key);
+        if (spec.imported.default) entry.defaultConsumed = true;
+        if (spec.imported.namespace) entry.namespaceConsumed = true;
+        if (Array.isArray(spec.imported.named)) {
+          for (const nm of spec.imported.named) entry.namedConsumed.add(nm);
+        }
+      }
+    }
+    consumptionIndex = map;
+  }
 
   if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
@@ -338,7 +368,16 @@ async function main() {
           effectiveFormat,
           options.onlyOrphans,
           liveFiles,
-          collectSymbols ? fileToSymbols : undefined
+          collectSymbols ? fileToSymbols : undefined,
+          collectSymbols ? consumptionIndex : undefined,
+          collectSymbols
+            ? new Map(
+                Array.from(fileToSymbols.entries()).map(([k, v]) => [
+                  k,
+                  v.exportUsage || undefined,
+                ])
+              )
+            : undefined
         );
     console.log(`Report generated at ${writtenPath}`);
   }

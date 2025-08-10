@@ -16,7 +16,27 @@ export async function reportGraph(
     {
       exports: ExportInfo;
       importSpecs: (ImportSpecifierInfo & { resolved?: string })[];
+      exportUsage?: {
+        default?: { exists: boolean; localName?: string; referencedInFile: boolean };
+        named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
+      };
     }
+  >,
+  consumptionIndex?: Map<
+    string,
+    {
+      defaultConsumed: boolean;
+      namespaceConsumed: boolean;
+      namedConsumed: Set<string>;
+    }
+  >,
+  exportUsageMap?: Map<
+    string,
+    | {
+        default?: { exists: boolean; localName?: string; referencedInFile: boolean };
+        named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
+      }
+    | undefined
   >
 ): Promise<string | undefined> {
   // If no format specified, do not write any file
@@ -46,33 +66,74 @@ export async function reportGraph(
       orphan,
     };
 
-    if (format === 'json' && orphan && symbols) {
+    if (format === 'json' && symbols) {
       const info = symbols.get(nodeAbs);
       if (info) {
-        const imports = info.importSpecs.map(spec => {
-          const resolvedRel = spec.resolved
-            ? path.relative(projectRoot, spec.resolved)
-            : undefined;
-          const item: any = {
-            source: spec.source,
-            resolved: resolvedRel,
-            kind: spec.kind,
-            imported: spec.imported,
-          };
-          if (onlyOrphans && spec.resolved && symbols.has(spec.resolved)) {
-            const target = symbols.get(spec.resolved)!;
-            item.target = {
-              node: resolvedRel!,
-              exports: target.exports,
-            };
-          }
-          return item;
-        });
-
-        base.symbols = {
-          exports: info.exports,
-          imports,
+        // Compute exports usage and orphan flags
+        const usage = (exportUsageMap && exportUsageMap.get(nodeAbs)) || info.exportUsage || { named: {} };
+        const cons = (consumptionIndex && consumptionIndex.get(nodeAbs)) || {
+          defaultConsumed: false,
+          namespaceConsumed: false,
+          namedConsumed: new Set<string>(),
         };
+
+        const namedSet = new Set<string>(info.exports.named || []);
+        for (const r of info.exports.reExports || []) {
+          if (r.named) {
+            for (const nm of r.named) namedSet.add(nm);
+          }
+        }
+        const namedArray = Array.from(namedSet);
+
+        const defaultReferenced = Boolean(usage.default && usage.default.referencedInFile);
+        const defaultExternally = Boolean(cons.defaultConsumed);
+
+        const exportsOut: any = {
+          default: {
+            exists: Boolean(info.exports.hasDefault),
+            referencedInFile: defaultReferenced,
+            orphan: !defaultReferenced && !defaultExternally,
+          },
+          named: namedArray.map((n) => {
+            const u = usage.named ? usage.named[n] : undefined;
+            const referenced = Boolean(u && u.referencedInFile);
+            const externally = Boolean(cons.namespaceConsumed || (cons.namedConsumed && cons.namedConsumed.has(n)));
+            return {
+              name: n,
+              referencedInFile: referenced,
+              orphan: !referenced && !externally,
+              reexport: Boolean(u && u.reexport),
+            };
+          }),
+          reExports: info.exports.reExports || [],
+        };
+
+        base.symbols = base.symbols || {};
+        base.symbols.exports = exportsOut;
+
+        // For orphan rows, include imports section and (with onlyOrphans) joined targets
+        if (orphan) {
+          const imports = info.importSpecs.map(spec => {
+            const resolvedRel = spec.resolved
+              ? path.relative(projectRoot, spec.resolved)
+              : undefined;
+            const item: any = {
+              source: spec.source,
+              resolved: resolvedRel,
+              kind: spec.kind,
+              imported: spec.imported,
+            };
+            if (onlyOrphans && spec.resolved && symbols.has(spec.resolved)) {
+              const target = symbols.get(spec.resolved)!;
+              item.target = {
+                node: resolvedRel!,
+                exports: target.exports,
+              };
+            }
+            return item;
+          });
+          base.symbols.imports = imports;
+        }
       }
     }
 
