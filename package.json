@@ -1,6 +1,6 @@
 {
   "name": "codereap",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Harvest the living, reap the dead.",
   "main": "dist/index.js",
   "bin": {
