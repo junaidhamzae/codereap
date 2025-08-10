@@ -90,6 +90,14 @@ async function main() {
       ? fileCfg.exclude
       : [];
 
+  // Determine effective output settings early (for gating symbol collection later)
+  const effectiveFormat =
+    getSrc('format') === 'cli' ? options.format : fileCfg.format;
+  const effectiveOut =
+    getSrc('out') === 'cli' ? options.out : fileCfg.out || options.out;
+  const effectiveOnlyOrphans = options.onlyOrphans === true;
+  const collectSymbols = effectiveFormat === 'json';
+
   // Parse CLI alias mappings into paths-style object
   let cliPaths = undefined;
   if (options.alias) {
@@ -236,6 +244,8 @@ async function main() {
   }
 
   console.log('Parsing files and building dependency graph...');
+  // Collect per-file symbols when JSON output is requested
+  const fileToSymbols = new Map();
   const allFilesToParse = [...files];
   // Also parse the JS entrypoint
   for (const entrypoint of entrypoints) {
@@ -246,7 +256,9 @@ async function main() {
 
   await Promise.all(
     allFilesToParse.map(async (file) => {
-      const { imports } = await parseFile(file);
+      const { imports, importSpecs, exportsInfo } = await parseFile(file, {
+        collectSymbols,
+      });
       for (const imp of imports) {
         let resolved = resolveImport(file, imp, {
           root: mergedRoot,
@@ -267,13 +279,44 @@ async function main() {
           }
         }
       }
+
+      if (collectSymbols) {
+        // Build enriched import specs with resolved absolute targets when in graph
+        const enriched = Array.isArray(importSpecs)
+          ? importSpecs.map((spec) => {
+              let resolved = resolveImport(file, spec.source, {
+                root: mergedRoot,
+                importRoot,
+                paths,
+                extensions: extensions.map((e) =>
+                  e.startsWith('.') ? e : `.${e}`
+                ),
+              });
+              if (resolved) {
+                if (rootDir && outDir && resolved.includes(outDir)) {
+                  const sourceFile = resolved
+                    .replace(outDir, rootDir)
+                    .replace('.js', '.ts');
+                  if (fs.existsSync(sourceFile)) resolved = sourceFile;
+                }
+                if (!graph.nodes.has(resolved)) {
+                  resolved = undefined;
+                }
+              }
+              return { ...spec, resolved };
+            })
+          : [];
+        fileToSymbols.set(file, {
+          exports: exportsInfo || {
+            hasDefault: false,
+            named: [],
+            reExports: [],
+          },
+          importSpecs: enriched,
+        });
+      }
     })
   );
-
-  const effectiveFormat =
-    getSrc('format') === 'cli' ? options.format : fileCfg.format;
-  const effectiveOut =
-    getSrc('out') === 'cli' ? options.out : fileCfg.out || options.out;
 
   if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
@@ -294,7 +337,8 @@ async function main() {
           mergedRoot,
           effectiveFormat,
           options.onlyOrphans,
-          liveFiles
+          liveFiles,
+          collectSymbols ? fileToSymbols : undefined
         );
     console.log(`Report generated at ${writtenPath}`);
   }

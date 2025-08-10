@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 import { Graph } from './grapher';
+import type { ExportInfo, ImportSpecifierInfo } from './parser';
 
 export async function reportGraph(
   graph: Graph,
@@ -9,7 +10,14 @@ export async function reportGraph(
   projectRoot: string,
   format?: 'json' | 'csv',
   onlyOrphans?: boolean,
-  liveFiles?: Set<string>
+  liveFiles?: Set<string>,
+  symbols?: Map<
+    string,
+    {
+      exports: ExportInfo;
+      importSpecs: (ImportSpecifierInfo & { resolved?: string })[];
+    }
+  >
 ): Promise<string | undefined> {
   // If no format specified, do not write any file
   if (!format) return undefined;
@@ -27,16 +35,48 @@ export async function reportGraph(
   }
 
   // Build per-node records with requested fields and root-relative node paths
-  let records: Array<{ [key: string]: string | number | boolean }> = nodes.map(nodeAbs => {
+  let records: Array<{ [key: string]: any }> = nodes.map(nodeAbs => {
     const node = path.relative(projectRoot, nodeAbs);
     const inDeg = inDegreeMap[nodeAbs] ?? 0;
     const orphan = liveFiles ? !liveFiles.has(nodeAbs) : inDeg === 0;
-    return {
+    const base: { [key: string]: any } = {
       node,
       exists: true,
       'in-degree': inDeg,
       orphan,
     };
+
+    if (format === 'json' && orphan && symbols) {
+      const info = symbols.get(nodeAbs);
+      if (info) {
+        const imports = info.importSpecs.map(spec => {
+          const resolvedRel = spec.resolved
+            ? path.relative(projectRoot, spec.resolved)
+            : undefined;
+          const item: any = {
+            source: spec.source,
+            resolved: resolvedRel,
+            kind: spec.kind,
+            imported: spec.imported,
+          };
+          if (onlyOrphans && spec.resolved && symbols.has(spec.resolved)) {
+            const target = symbols.get(spec.resolved)!;
+            item.target = {
+              node: resolvedRel!,
+              exports: target.exports,
+            };
+          }
+          return item;
+        });
+
+        base.symbols = {
+          exports: info.exports,
+          imports,
+        };
+      }
+    }
+
+    return base;
   });
 
   if (onlyOrphans) {
