@@ -1,0 +1,73 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dynamicEdges off 1`] = `
+[
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "A.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "load",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "C.ts",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "dyn",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "package.json",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+]
+`;

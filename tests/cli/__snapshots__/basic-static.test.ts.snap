@@ -1,0 +1,114 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys 1`] = `
+[
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "A.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 1,
+    "node": "B.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "used",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 1,
+    "node": "C.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "value",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "D.ts",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "orphan",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "package.json",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+]
+`;

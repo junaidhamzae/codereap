@@ -18,6 +18,7 @@ describe('CLI basic-static fixture', () => {
     const rows = normalizeReport(json as any[]);
     const dRow = rows.find(r => r.node.endsWith('D.ts'))!;
     expect(dRow.orphan).toBe(true);
+    expect(rows).toMatchSnapshot();
     // sanity keys
     expect(dRow).toEqual(expect.objectContaining({ node: expect.any(String), exists: true, orphan: expect.any(Boolean) }));
   });

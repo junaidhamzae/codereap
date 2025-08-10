@@ -18,6 +18,7 @@ describe('CLI alias/importRoot resolution', () => {
     // util and button should be live due to index.ts imports
     expect(getRow(rows, 'src/util.ts').orphan).toBe(false);
     expect(getRow(rows, 'src/components/Button/index.ts').orphan).toBe(false);
+    expect(rows).toMatchSnapshot();
   });
 });
 

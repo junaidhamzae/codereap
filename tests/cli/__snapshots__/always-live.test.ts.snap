@@ -1,0 +1,48 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI --alwaysLive globs marks files live without edges 1`] = `
+[
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "A.ts",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "E.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "E",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+]
+`;

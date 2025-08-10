@@ -130,13 +130,22 @@ export async function reportGraph(
             }
             return item;
           });
-          base.symbols.imports = imports;
+          // Stable sort by source|resolved for determinism
+          const sortedImports = imports.sort((a: any, b: any) => {
+            const aKey = `${a.source}|${a.resolved ?? ''}`;
+            const bKey = `${b.source}|${b.resolved ?? ''}`;
+            return aKey.localeCompare(bKey);
+          });
+          base.symbols.imports = sortedImports;
         }
       }
     }
 
     return base;
   });
+
+  // Sort records by node for determinism
+  records.sort((a, b) => String(a.node).localeCompare(String(b.node)));
 
   if (onlyOrphans) {
     records = records.filter(r => Boolean(r['orphan']));

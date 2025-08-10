@@ -13,6 +13,7 @@ describe('CLI --alwaysLive globs', () => {
     const rows = res.json as any[];
     const e = rows.find(r => r.node.endsWith('E.ts'))!;
     expect(e.orphan).toBe(false);
+    expect(rows).toMatchSnapshot();
   });
 });
 

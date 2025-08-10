@@ -20,6 +20,7 @@ describe('CLI Next-like auto seeding', () => {
     expect(getRow(rows, 'components/Widget.ts').orphan).toBe(false);
     // stdout should include Next detection message
     expect(res.stdout).toMatch(/Next\.js detected/);
+    expect(rows).toMatchSnapshot();
   });
 });
 

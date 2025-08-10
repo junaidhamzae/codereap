@@ -24,6 +24,7 @@ describe('CLI dynamic edges on/off', () => {
     expect(res.status).toBe(0);
     rows = res.json as any[];
     expect(getRow(rows, 'C.ts').orphan).toBe(true);
+    expect(rows).toMatchSnapshot();
   });
 });
 

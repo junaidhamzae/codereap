@@ -15,6 +15,7 @@ describe('CLI --dirOnly directory aggregation', () => {
     const dirs = rows.map(r => r.directory).sort();
     // b has an incoming edge from a, so it is not orphan; a has outgoing only, so it is orphan when onlyOrphans
     expect(dirs).toEqual(['a']);
+    expect(rows).toMatchSnapshot();
   });
 });
 

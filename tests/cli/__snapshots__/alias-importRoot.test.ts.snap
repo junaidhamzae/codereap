@@ -1,0 +1,107 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and importRoot 1`] = `
+[
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "package.json",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 1,
+    "node": "src/components/Button/index.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "Button",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "src/index.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 1,
+    "node": "src/util.ts",
+    "orphan": false,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "u",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "tsconfig.json",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+]
+`;

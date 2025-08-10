@@ -13,6 +13,7 @@ describe('CLI --onlyOrphans with target enrichment', () => {
     const data = res.json as any[];
     const a = data.find(r => r.node.endsWith('A.ts'))!;
     expect(a.symbols.imports[0]).toEqual(expect.objectContaining({ source: './B', target: expect.any(Object) }));
+    expect(data).toMatchSnapshot();
   });
 });
 

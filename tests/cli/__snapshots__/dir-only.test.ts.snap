@@ -1,0 +1,12 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI --dirOnly directory aggregation aggregates directories and applies orphan rule 1`] = `
+[
+  {
+    "directory": "a",
+    "external-in-degree": 0,
+    "file-count": 1,
+    "orphan": true,
+  },
+]
+`;

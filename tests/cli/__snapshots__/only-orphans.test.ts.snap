@@ -1,0 +1,70 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CLI --onlyOrphans with target enrichment includes symbols.imports with target info for resolvable imports 1`] = `
+[
+  {
+    "exists": true,
+    "in-degree": 0,
+    "node": "A.ts",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [],
+        "reExports": [],
+      },
+      "imports": [
+        {
+          "imported": {
+            "default": false,
+            "named": [],
+            "namespace": false,
+          },
+          "kind": "esm",
+          "resolved": "B.ts",
+          "source": "./B",
+          "target": {
+            "exports": {
+              "hasDefault": false,
+              "named": [
+                "b",
+              ],
+              "reExports": [],
+            },
+            "node": "B.ts",
+          },
+        },
+      ],
+    },
+  },
+  {
+    "exists": true,
+    "in-degree": 1,
+    "node": "B.ts",
+    "orphan": true,
+    "symbols": {
+      "exports": {
+        "default": {
+          "exists": false,
+          "orphan": true,
+          "referencedInFile": false,
+        },
+        "named": [
+          {
+            "name": "b",
+            "orphan": true,
+            "reexport": false,
+            "referencedInFile": false,
+          },
+        ],
+        "reExports": [],
+      },
+      "imports": [],
+    },
+  },
+]
+`;
