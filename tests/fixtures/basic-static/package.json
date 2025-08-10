@@ -1,0 +1,9 @@
+{
+  "name": "fixture-basic-static",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node A.ts"
+  }
+}
+
+
