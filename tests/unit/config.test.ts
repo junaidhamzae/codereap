@@ -18,6 +18,12 @@ describe('config.loadCodereapConfig', () => {
     expect(cfg.out).toBe('rep');
     expect(cfg.paths).toEqual({ '@/*': ['src/*'] });
   }));
+
+  it('no file config present falls back to defaults', () => withTempDir((root) => {
+    const cfg = loadCodereapConfig(root);
+    expect(cfg.root).toBe(root);
+    expect(cfg.exclude).toEqual([]);
+  }));
 });
 
 describe('config.mergeResolutionOptions', () => {
