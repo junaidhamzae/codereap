@@ -26,7 +26,7 @@ Modern codebases accumulate unused components, pages and modules over time. Thos
 - **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. For JSON file reports, CodeReap also collects exported symbols for all files and per‑import specifiers for orphan files. Other file types are still represented as nodes.
 - **Resolve** – Imports are resolved using relative paths, `baseUrl`/`paths` mappings from `tsconfig.json` or `jsconfig.json`, custom alias patterns and an optional `importRoot`. Node.js resolution is used as a last resort.
 - **Graph** – A directed graph is built where each file is a node and edges represent dependencies.
-- **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`) and script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references). When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
+- **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`), script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references), and (when enabled) framework conventions. For Next.js, route files in `pages/` or `app/` and `middleware.{js,ts}` are auto‑seeded. When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
 - **Prune (reachability)** – From entrypoints, the graph is traversed to find all live files. Files that are not reachable are marked as orphans.
 - **Report** – Results can be written to JSON or CSV. File reports include the path, an existence flag, in‑degree (incoming edges, informational) and whether it is an orphan. Directory reports aggregate counts and whether a directory is orphan.
 
@@ -60,6 +60,9 @@ codereap [options]
 - `--alias <pattern=target>` – one or more alias mappings (comma‑separate) like TypeScript `paths`
 - `--dirOnly` – aggregate by directory and report orphan directories instead of files
 - `--onlyOrphans` – include only orphan rows in the report
+- `--frameworkEntrypoints <auto|off>` – enable/disable framework auto‑seeding (default: `auto`)
+- `--entry <globs>` – comma‑separated glob(s) for extra entrypoints (relative to `--root`)
+- `--alwaysLive <globs>` – comma‑separated glob(s) to mark files as live regardless of traversal (relative to `--root`)
 
 ---
 
@@ -91,6 +94,33 @@ Notes:
 - All paths in reports are relative to `--root`.
 - JSON output is always pretty‑printed.
 - Symbol extraction is performed only for JSON file reports; directory mode and CSV outputs are unchanged.
+- Framework auto‑seeding currently supports Next.js (pages/, src/pages/, app/ routes, and middleware), respecting `--exclude`.
+- Reachability is computed from combined entrypoints (package.json + auto‑seeded + `--entry`). Files matching `--alwaysLive` are unioned into the live set after traversal.
+- In‑degree remains informational.
+
+Next.js auto detection (default):
+
+```bash
+codereap --root . --format json --out codereap-report
+```
+
+Disable framework auto‑seeding:
+
+```bash
+codereap --root . --frameworkEntrypoints off --format json --out codereap-report
+```
+
+Add custom entrypoints:
+
+```bash
+codereap --root . --entry "scripts/**/*.js,src/cli/**/*.{ts,js}" --format json --out codereap-report
+```
+
+Mark files as always live (e.g. i18n, type defs):
+
+```bash
+codereap --root . --alwaysLive "locales/**/*.json,**/*.d.ts" --format json --out codereap-report
+```
 
 Generate only orphan rows with enriched import targets (JSON):
 
@@ -151,7 +181,7 @@ When you run CodeReap without `--dirOnly`, each row in the report represents a f
 - `in‑degree` – number of other files that import it (informational)
 - `orphan` – `true` if the file is not reachable from any entry point
 
-When writing JSON file reports:
+When writing JSON file reports (orphan status reflects reachability from entrypoints, including framework‑seeded and user‑provided entries):
 
 - All rows include `symbols.exports` (per‑export usage):
   - `default`: `{ exists: boolean, referencedInFile: boolean, orphan: boolean }`

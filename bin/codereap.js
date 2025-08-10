@@ -59,6 +59,19 @@ program
     'Aggregate at directory level and report orphan directories'
   )
   .option('--onlyOrphans', 'When writing reports, include only orphan rows')
+  .option(
+    '--frameworkEntrypoints <mode>',
+    'Framework entrypoint seeding: auto or off (default: auto)',
+    'auto'
+  )
+  .option(
+    '--entry <globs>',
+    'Comma-separated glob(s) to add as extra entrypoints (relative to --root)'
+  )
+  .option(
+    '--alwaysLive <globs>',
+    'Comma-separated glob(s) to mark as always-live (relative to --root)'
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -146,8 +159,9 @@ async function main() {
 
   const packageJsonPath = path.join(root, 'package.json');
   let entrypoints = [];
+  let packageJson = undefined;
   if (fs.existsSync(packageJsonPath)) {
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const main = packageJson.main ? [path.resolve(root, packageJson.main)] : [];
     const module = packageJson.module
       ? [path.resolve(root, packageJson.module)]
@@ -226,6 +240,99 @@ async function main() {
   }
 
   console.log('Project Source Entrypoints:', entrypoints);
+
+  // Resolve framework and user-provided entrypoint globs
+  const fg = require('fast-glob');
+  const extsPattern = `.{js,jsx,ts,tsx}`;
+  const ignorePatterns = exclude && exclude.length > 0 ? exclude : [];
+
+  // Helper to resolve globs to abs paths
+  const resolveGlobs = (globs) => {
+    if (!globs || globs.length === 0) return [];
+    const patterns = Array.isArray(globs) ? globs : [globs];
+    const res = fg.sync(patterns, {
+      cwd: root,
+      absolute: true,
+      ignore: ignorePatterns,
+      dot: false,
+    });
+    return res;
+  };
+
+  // Next.js detection and seeding
+  const frameworkMode = (options.frameworkEntrypoints || 'auto').toLowerCase();
+  let nextDetected = false;
+  if (frameworkMode === 'auto') {
+    const hasNextDep =
+      packageJson &&
+      ((packageJson.dependencies && packageJson.dependencies.next) ||
+        (packageJson.devDependencies && packageJson.devDependencies.next));
+    const hasNextConfig =
+      fs.existsSync(path.join(root, 'next.config.js')) ||
+      fs.existsSync(path.join(root, 'next.config.mjs'));
+    const hasNextScript =
+      packageJson &&
+      packageJson.scripts &&
+      Object.values(packageJson.scripts).some(
+        (s) => typeof s === 'string' && /\bnext\s+(dev|start|build)\b/.test(s)
+      );
+    nextDetected = Boolean(hasNextDep || hasNextConfig || hasNextScript);
+  }
+
+  if (frameworkMode === 'auto' && nextDetected) {
+    const nextGlobs = [
+      // Pages Router
+      `pages/**/*${extsPattern}`,
+      `src/pages/**/*${extsPattern}`,
+      // API routes
+      `pages/api/**/*${extsPattern}`,
+      `src/pages/api/**/*${extsPattern}`,
+      // Special files
+      `pages/_app${extsPattern}`,
+      `pages/_document${extsPattern}`,
+      `pages/_error${extsPattern}`,
+      `src/pages/_app${extsPattern}`,
+      `src/pages/_document${extsPattern}`,
+      `src/pages/_error${extsPattern}`,
+      // App Router (support under root and src/)
+      `app/**/page${extsPattern}`,
+      `app/**/layout${extsPattern}`,
+      `app/**/error${extsPattern}`,
+      `app/**/loading${extsPattern}`,
+      `app/**/not-found${extsPattern}`,
+      `src/app/**/page${extsPattern}`,
+      `src/app/**/layout${extsPattern}`,
+      `src/app/**/error${extsPattern}`,
+      `src/app/**/loading${extsPattern}`,
+      `src/app/**/not-found${extsPattern}`,
+      // Middleware
+      `middleware.{js,ts}`,
+      `src/middleware.{js,ts}`,
+    ];
+    const resolved = resolveGlobs(nextGlobs);
+    if (resolved.length > 0) {
+      console.log(
+        `Next.js detected; seeding ${resolved.length} entrypoints via conventions.`
+      );
+      entrypoints.push(...resolved);
+    }
+  }
+
+  // User-provided extra entries
+  if (options.entry) {
+    const userGlobs = String(options.entry)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const resolved = resolveGlobs(userGlobs);
+    if (resolved.length > 0) {
+      console.log(`User entry globs resolved to ${resolved.length} files.`);
+      entrypoints.push(...resolved);
+    }
+  }
+
+  // De-duplicate entrypoints
+  entrypoints = Array.from(new Set(entrypoints));
 
   console.log(`Scanning for source files...`);
   const files = await scanFiles(mergedRoot, extensions, exclude, rootDir);
@@ -350,8 +457,19 @@ async function main() {
 
   if (effectiveFormat === 'json' || effectiveFormat === 'csv') {
     console.log('Generating report...');
-    // Compute live files via reachability from entrypoints
-    const liveFiles = computeLiveFiles(graph, entrypoints);
+    // Compute live files via reachability from entrypoints and apply always-live
+    let liveFiles = computeLiveFiles(graph, entrypoints);
+    // Always-live: expand live set with user globs
+    if (options.alwaysLive) {
+      const alwaysGlobs = String(options.alwaysLive)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const resolvedAlways = resolveGlobs(alwaysGlobs);
+      for (const p of resolvedAlways) {
+        if (graph.nodes.has(p)) liveFiles.add(p);
+      }
+    }
     const writtenPath = options.dirOnly
       ? await reportDirectories(
           graph,
@@ -395,8 +513,24 @@ async function main() {
     console.log(`Orphan directories count: ${orphanDirs.length}`);
   } else {
     console.log('Finding orphans...');
-    // Reachability-based orphan files
-    const liveFiles = computeLiveFiles(graph, entrypoints);
+    // Reachability-based orphan files (apply always-live)
+    let liveFiles = computeLiveFiles(graph, entrypoints);
+    if (options.alwaysLive) {
+      const alwaysGlobs = String(options.alwaysLive)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const resolvedAlways = (function () {
+        try {
+          return resolveGlobs(alwaysGlobs);
+        } catch (_e) {
+          return [];
+        }
+      })();
+      for (const p of resolvedAlways) {
+        if (graph.nodes.has(p)) liveFiles.add(p);
+      }
+    }
     const orphans = [...graph.nodes].filter((n) => !liveFiles.has(n));
     // Apply exclude patterns at the end for printing consistency
     const micromatch = require('micromatch');
