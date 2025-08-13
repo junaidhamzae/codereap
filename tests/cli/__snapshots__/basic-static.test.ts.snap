@@ -7,6 +7,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "in-degree": 0,
     "node": "A.ts",
     "orphan": false,
+    "size-bytes": 16,
     "symbols": {
       "exports": {
         "default": {
@@ -24,6 +25,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "in-degree": 1,
     "node": "B.ts",
     "orphan": false,
+    "size-bytes": 39,
     "symbols": {
       "exports": {
         "default": {
@@ -48,6 +50,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "in-degree": 1,
     "node": "C.ts",
     "orphan": false,
+    "size-bytes": 27,
     "symbols": {
       "exports": {
         "default": {
@@ -72,6 +75,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "in-degree": 0,
     "node": "D.ts",
     "orphan": true,
+    "size-bytes": 45,
     "symbols": {
       "exports": {
         "default": {
@@ -97,6 +101,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "in-degree": 0,
     "node": "package.json",
     "orphan": true,
+    "size-bytes": 106,
     "symbols": {
       "exports": {
         "default": {

@@ -7,6 +7,7 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     "in-degree": 1,
     "node": "components/Widget.ts",
     "orphan": false,
+    "size-bytes": 27,
     "symbols": {
       "exports": {
         "default": {
@@ -31,6 +32,7 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     "in-degree": 0,
     "node": "package.json",
     "orphan": true,
+    "size-bytes": 147,
     "symbols": {
       "exports": {
         "default": {
@@ -49,6 +51,7 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     "in-degree": 0,
     "node": "pages/index.ts",
     "orphan": false,
+    "size-bytes": 87,
     "symbols": {
       "exports": {
         "default": {

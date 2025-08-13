@@ -7,6 +7,7 @@ exports[`CLI --onlyOrphans with target enrichment includes symbols.imports with 
     "in-degree": 0,
     "node": "A.ts",
     "orphan": true,
+    "size-bytes": 16,
     "symbols": {
       "exports": {
         "default": {
@@ -46,6 +47,7 @@ exports[`CLI --onlyOrphans with target enrichment includes symbols.imports with 
     "in-degree": 1,
     "node": "B.ts",
     "orphan": true,
+    "size-bytes": 22,
     "symbols": {
       "exports": {
         "default": {

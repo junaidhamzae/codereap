@@ -7,6 +7,7 @@ exports[`CLI --dirOnly directory aggregation aggregates directories and applies 
     "external-in-degree": 0,
     "file-count": 1,
     "orphan": true,
+    "size-bytes": 19,
   },
 ]
 `;

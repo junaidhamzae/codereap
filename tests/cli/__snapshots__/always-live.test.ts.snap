@@ -7,6 +7,7 @@ exports[`CLI --alwaysLive globs marks files live without edges 1`] = `
     "in-degree": 0,
     "node": "A.ts",
     "orphan": true,
+    "size-bytes": 16,
     "symbols": {
       "exports": {
         "default": {
@@ -25,6 +26,7 @@ exports[`CLI --alwaysLive globs marks files live without edges 1`] = `
     "in-degree": 0,
     "node": "E.ts",
     "orphan": false,
+    "size-bytes": 22,
     "symbols": {
       "exports": {
         "default": {

@@ -7,6 +7,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "in-degree": 0,
     "node": "package.json",
     "orphan": true,
+    "size-bytes": 118,
     "symbols": {
       "exports": {
         "default": {
@@ -25,6 +26,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "in-degree": 1,
     "node": "src/components/Button/index.ts",
     "orphan": false,
+    "size-bytes": 27,
     "symbols": {
       "exports": {
         "default": {
@@ -49,6 +51,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "in-degree": 0,
     "node": "src/index.ts",
     "orphan": false,
+    "size-bytes": 53,
     "symbols": {
       "exports": {
         "default": {
@@ -66,6 +69,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "in-degree": 1,
     "node": "src/util.ts",
     "orphan": false,
+    "size-bytes": 22,
     "symbols": {
       "exports": {
         "default": {
@@ -90,6 +94,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "in-degree": 0,
     "node": "tsconfig.json",
     "orphan": true,
+    "size-bytes": 143,
     "symbols": {
       "exports": {
         "default": {

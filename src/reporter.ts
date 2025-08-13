@@ -40,6 +40,19 @@ export async function reportGraph(
 ): Promise<string | undefined> {
   // Always write JSON
 
+  // Precompute file sizes for all nodes (best-effort)
+  const sizeByNode = new Map<string, number>();
+  await Promise.all(
+    Array.from(graph.nodes).map(async (abs) => {
+      try {
+        const st = await fs.stat(abs);
+        sizeByNode.set(abs, typeof st.size === 'number' ? st.size : 0);
+      } catch {
+        // ignore missing files
+      }
+    })
+  );
+
   // Compute in-degree for every node in the graph
   const nodes = Array.from(graph.nodes);
   const inDegreeMap: Record<string, number> = Object.create(null);
@@ -62,6 +75,7 @@ export async function reportGraph(
       exists: true,
       'in-degree': inDeg,
       orphan,
+      'size-bytes': sizeByNode.get(nodeAbs) ?? null,
     };
 
     if (symbols) {
@@ -221,6 +235,22 @@ export async function reportDirectories(
   // Always write JSON
 
   let records = computeDirectoryRecords(graph, projectRoot, liveFiles);
+
+  // Compute directory sizes by summing file sizes (best-effort)
+  const dirSizes: Record<string, number> = Object.create(null);
+  await Promise.all(
+    Array.from(graph.nodes).map(async (abs) => {
+      try {
+        const st = await fs.stat(abs);
+        const size = typeof st.size === 'number' ? st.size : 0;
+        const relDir = path.relative(projectRoot, path.dirname(abs)) || '.';
+        dirSizes[relDir] = (dirSizes[relDir] || 0) + size;
+      } catch {
+        // ignore missing files
+      }
+    })
+  );
+  records = records.map((r) => ({ ...r, 'size-bytes': dirSizes[r.directory] || 0 }));
   if (onlyOrphans) {
     records = records.filter(r => r.orphan);
   }
