@@ -57,6 +57,10 @@ function resolveWithTsPaths(specifier: string, options: ResolveOptions, extensio
 
 export function resolveImport(from: string, specifier: string, options?: ResolveOptions): string | null {
   const extensions = options?.extensions ?? DEFAULT_EXTENSIONS;
+  const isBareSpecifier = (s: string) => {
+    // Bare if not relative and not absolute (handles scoped packages like @scope/name)
+    return !s.startsWith('.') && !path.isAbsolute(s);
+  };
 
   // 1) Relative imports
   if (specifier.startsWith('.')) {
@@ -89,7 +93,15 @@ export function resolveImport(from: string, specifier: string, options?: Resolve
   try {
     return require.resolve(specifier, { paths: [path.dirname(from)] });
   } catch (_e) {
-    console.error(`Could not resolve '${specifier}' from '${from}'`);
+    const err: any = _e;
+    const code = err && typeof err === 'object' ? err.code : undefined;
+    // Suppress only the common "not found" for bare package specifiers when requested.
+    // Still log other resolver errors (e.g., ERR_PACKAGE_PATH_NOT_EXPORTED) to surface real issues.
+    if (isBareSpecifier(specifier) && code === 'MODULE_NOT_FOUND') {
+      return null;
+    }
+    const suffix = code ? ` (code: ${code})` : '';
+    console.error(`Could not resolve '${specifier}' from '${from}'${suffix}`);
     return null;
   }
 }

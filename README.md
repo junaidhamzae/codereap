@@ -172,6 +172,18 @@ codereap --alias "src/*=src/*" --root .
 
 ---
 
+## External packages and logging
+
+- Node modules are not scanned. CodeReap builds the graph only from files under `--root` and ignores `node_modules` by default.
+- Bare package imports (e.g., `react`, `next/navigation`) that cannot be resolved due to being simply missing will not print “Could not resolve …” noise. These common not‑found cases are suppressed to keep output clean.
+- CodeReap still logs meaningful resolver errors (with error codes), including:
+  - Relative/absolute import failures
+  - Package resolution errors other than not‑found (for example, `ERR_PACKAGE_PATH_NOT_EXPORTED`)
+
+Notes:
+- If you use absolute aliases, set them via `tsconfig.json` (`compilerOptions.baseUrl`, `paths`), `--importRoot`, or `--alias` so local imports resolve cleanly.
+- External dependencies remain visible in JSON under `symbols.imports` as bare `source` entries with `resolved` omitted.
+
 ## Interpreting the report
 
 When you run CodeReap without `--dirOnly`, each row in the report represents a file. Columns:

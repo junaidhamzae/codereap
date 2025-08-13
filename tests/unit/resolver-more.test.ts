@@ -20,11 +20,11 @@ describe('resolver fallbacks and errors', () => {
     const p = resolveImport(from, 'pkgfile', { root });
     expect(p).toBe(target);
 
-    // Unresolvable package should hit node resolution catch path
+    // Unresolvable bare package should be suppressed (no console error) and return null
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const none = resolveImport(from, 'definitely-not-a-real-pkg-name-xyz', { root });
     expect(none).toBeNull();
-    expect(spy).toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   }));
 });
