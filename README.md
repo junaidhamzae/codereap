@@ -192,6 +192,7 @@ When you run CodeReap without `--dirOnly`, each row in the report represents a f
 - `exists` – always `true` for scanned files
 - `in‑degree` – number of other files that import it (informational)
 - `orphan` – `true` if the file is not reachable from any entry point
+- `size-bytes` – file size in bytes (best‑effort)
 
 When writing JSON file reports (orphan status reflects reachability from entrypoints, including framework‑seeded and user‑provided entries):
 
@@ -242,6 +243,7 @@ With `--dirOnly`, the report lists directories. Each record includes:
 - `file-count` – number of files in the directory
 - `external-in-degree` – imports coming from outside the directory
 - `orphan` – `true` when `file-count > 0`, `external-in-degree === 0`, and none of the files in the directory are reachable from any entrypoint
+- `size-bytes` – total size of files in the directory (best‑effort)
 
 A file or directory flagged as `orphan` is a candidate for deletion. Some files (e.g. test fixtures or documentation) may be intentionally unreferenced — add their patterns to `--exclude` or your config file.
 
