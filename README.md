@@ -260,6 +260,30 @@ A file or directory flagged as `orphan` is a candidate for deletion. Some files 
 
 Contributions are welcome! Please open an issue or submit a pull request.
 
+### Versioning and releasing
+
+We use npm's version workflow with guards:
+
+- preversion: aborts if the working tree isn't clean.
+- postversion: auto‑pushes the commit and tag created by `npm version`.
+
+Release steps:
+
+```bash
+# run build and tests locally
+npm run prepublish:check
+
+# bump version (patch/minor/major); creates commit + tag and pushes
+npm version patch -m "chore: v%s release notes"
+
+# publish to npm (requires auth)
+npm publish
+```
+
+Notes:
+- Ensure the tree is clean before `npm version` (the preversion guard enforces this).
+- `npm version` updates `package.json`, creates a git tag matching the version, and the postversion script pushes with `--follow-tags`.
+
 ---
 
 ## Local development and testing
