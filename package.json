@@ -22,7 +22,9 @@
     "test:watch": "jest --watch",
     "test:unit": "jest tests/unit",
     "test:cli": "npm run build && jest tests/cli",
-    "prepublish:check": "npm run build && npm test && npm run test:cli"
+    "prepublish:check": "npm run build && npm test && npm run test:cli",
+    "preversion": "git diff --quiet && git diff --cached --quiet || (echo 'Working tree not clean'; exit 1)",
+    "postversion": "git push --follow-tags"
   },
   "keywords": [
     "cli",
