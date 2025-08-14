@@ -7,10 +7,31 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main id="landing">
+    <header id="appHeader" style="display:none">
+      <div class="left">Report: <span id="reportName">None</span></div>
+      <div class="right"><button id="changeReport" style="display:none">Change report</button></div>
+    </header>
+    <main id="landing" class="card">
       <h1>Select a CodeReap JSON report</h1>
       <input id="fileInput" type="file" accept=".json" />
     </main>
+    <section id="app" style="display:none">
+      <nav class="tabs">
+        <button id="tabTree" class="active">Explore Tree</button>
+        <button id="tabPrune">Prioritize Pruning</button>
+      </nav>
+      <div id="treePane">
+        <div class="toolbar"><label><input id="onlyOrphans" type="checkbox" /> Only orphans</label></div>
+        <div id="treeContainer"></div>
+      </div>
+      <div id="prunePane" style="display:none">
+        <div id="pruneControls"></div>
+        <table id="pruneTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
     <script type="module" src="/app.js"></script>
   </body>
   </html>
