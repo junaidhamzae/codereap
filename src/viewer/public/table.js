@@ -1,0 +1,108 @@
+import { state } from './state.js';
+import { humanBytes, extOf, copyText, firstSegment } from './utils.js';
+
+// Sorting strategies
+export const fileSorts = {
+  sizeFirst: (a,b)=> (b['size-bytes']??0) - (a['size-bytes']??0),
+  leafOrphanFirst: (a,b)=> (a['in-degree']??0) - (b['in-degree']??0) || (b['size-bytes']??0) - (a['size-bytes']??0),
+  maxExportsOrphanFirst: (a,b)=>{
+    const [ae,at] = exportCounts(a); const [be,bt] = exportCounts(b);
+    const ar = at>0 ? ae/at : -1; const br = bt>0 ? be/bt : -1;
+    return (br - ar) || (b['size-bytes']??0) - (a['size-bytes']??0);
+  }
+};
+
+function exportCounts(r){
+  const ex = r?.symbols?.exports;
+  if (!ex) return [0,0];
+  const named = Array.isArray(ex.named) ? ex.named : [];
+  const orphanNamed = named.filter(e=>e.orphan).length;
+  const total = (ex.default ? 1 : 0) + named.length;
+  const orphanTotal = (ex.default?.orphan ? 1 : 0) + orphanNamed;
+  return [orphanTotal, total];
+}
+
+export function renderFileControls(ctrlEl, rows, onChange){
+  // dynamic extension checkboxes
+  const exts = Array.from(new Set(rows.map(r=>extOf(r.node)).filter(Boolean))).sort();
+  ctrlEl.textContent=''; const wrap = document.createElement('div'); wrap.className='controls';
+  const extWrap = document.createElement('div'); extWrap.className='exts';
+  exts.forEach(x=>{
+    const id=`ext-${x}`; const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=false;
+    cb.onchange=()=>{ 
+      const selected = Array.from(extWrap.querySelectorAll('input:checked')).map(i=>i.id.replace('ext-',''));
+      onChange({extensions:selected});
+    };
+    const lab=document.createElement('label'); lab.htmlFor=id; lab.textContent=x;
+    const d=document.createElement('div'); d.className='ext'; d.append(cb,lab); extWrap.append(d);
+  });
+  const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeFirst">Size-First (Heaviest Orphans)</option><option value="leafOrphanFirst">Leaf-Orphan First</option><option value="maxExportsOrphanFirst">Max-Exports-Orphan First</option>';
+  sortSel.onchange=()=>onChange({sort:sortSel.value});
+  const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
+  wrap.append(extWrap, sortSel, copyBtn); ctrlEl.append(wrap);
+
+  function copyVisible(){
+    const paths = Array.from(document.querySelectorAll('tbody tr')).map(tr=>tr.getAttribute('data-path')).filter(Boolean);
+    copyText(paths.join('\n'));
+  }
+}
+
+export function renderFileTable(tbodyEl, rows, filters, sortKey){
+  let cur = rows.filter(r => r.orphan === true); // default orphan===true
+  if (filters.extensions?.length){ cur = cur.filter(r => filters.extensions.includes(extOf(r.node))); }
+  const sorter = fileSorts[sortKey || 'sizeFirst']; cur = cur.sort(sorter);
+  tbodyEl.textContent='';
+  for(const r of cur){
+    const tr=document.createElement('tr'); tr.setAttribute('data-path', r.node);
+    const ex = r.symbols?.exports;
+    const total = ex ? ((ex.default?1:0) + (ex.named?.length||0)) : 0;
+    const orphanTotal = ex ? ((ex.default?.orphan?1:0) + (ex.named?.filter(n=>n.orphan).length||0)) : 0;
+    tr.innerHTML = `<td>${r.node}</td><td>${humanBytes(r['size-bytes'])}</td><td>${r['in-degree']??'–'}</td><td>${ex? `${orphanTotal}/${total}` : '–'}</td>`;
+    tr.onclick = ()=>toggleExpand(tr, r);
+    tbodyEl.appendChild(tr);
+  }
+}
+
+export function renderDirControls(ctrlEl, rows, onChange){
+  ctrlEl.textContent='';
+  const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeDesc">Largest by size first</option><option value="fileCountDesc">High file count first</option><option value="quickWins">Quick wins</option><option value="segment">Path segmented clean up</option>';
+  const segmentSel=document.createElement('select'); segmentSel.style.display='none';
+  sortSel.onchange=()=>{
+    segmentSel.style.display = sortSel.value==='segment' ? '' : 'none';
+    if (sortSel.value==='segment'){
+      const segs = Array.from(new Set(rows.map(r=>firstSegment(r.directory)))).sort();
+      segmentSel.innerHTML = '<option value="">(Select segment)</option>' + segs.map(s=>`<option>${s}</option>`).join('');
+    }
+    onChange({sort:sortSel.value, segment: segmentSel.value});
+  };
+  segmentSel.onchange=()=>onChange({sort:'segment', segment: segmentSel.value});
+  const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
+  ctrlEl.append(sortSel, segmentSel, copyBtn);
+
+  function copyVisible(){
+    const paths = Array.from(document.querySelectorAll('tbody tr')).map(tr=>tr.getAttribute('data-path')).filter(Boolean);
+    copyText(paths.join('\n'));
+  }
+}
+
+export function renderDirTable(tbodyEl, rows, sortKey, segment){
+  let cur = rows.filter(r => r.orphan === true); // hard filter
+  const key = sortKey || 'sizeDesc';
+  if (key==='segment' && segment){ cur = cur.filter(r => firstSegment(r.directory) === segment); }
+  const sorters = {
+    sizeDesc: (a,b)=> (b['size-bytes']??0) - (a['size-bytes']??0),
+    fileCountDesc: (a,b)=> (b['file-count']??0) - (a['file-count']??0),
+    quickWins: (a,b)=> (a['size-bytes']??0) - (b['size-bytes']??0),
+    segment: (a,b)=> (b['size-bytes']??0) - (a['size-bytes']??0),
+  };
+  cur = cur.sort(sorters[key]);
+  tbodyEl.textContent='';
+  for(const r of cur){
+    const tr=document.createElement('tr'); tr.setAttribute('data-path', r.directory);
+    tr.innerHTML = `<td>${r.directory}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy">Copy</button></td>`;
+    tr.querySelector('.copy').onclick = (e)=>{ e.stopPropagation(); copyText(r.directory); };
+    tbodyEl.appendChild(tr);
+  }
+}
+
+
