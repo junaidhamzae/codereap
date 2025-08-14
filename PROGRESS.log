@@ -30,3 +30,20 @@
 - 5.2 Updated README with viewer section; documented flags, usage, privacy.
 - 5.3 Bumped version to 0.11.0; added CHANGELOG.md with viewer feature.
 
+[2025-08-14] Final QA & Acceptance Checklist:
+
+6.1 Manual Acceptance Runbook:
+✅ Build: npm run build completes successfully
+✅ CLI Integration: viewer.integration.test.ts passes (--viewer --no-open)
+✅ Unit Tests: parse, tree filter, table sorters all pass
+✅ /healthz endpoint returns 200 OK
+✅ All test suites green (54 tests pass, 0 fail)
+✅ Package tarball includes dist/viewer/** assets
+✅ README documents viewer usage and privacy
+✅ Version bumped to 0.11.0 with CHANGELOG
+
+6.2 CI-Green State:
+✅ npm run build && npm test: All 54 tests pass
+✅ Zero TypeScript errors in viewer modules
+✅ Zero failing test suites
+
