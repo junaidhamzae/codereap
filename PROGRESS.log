@@ -25,3 +25,8 @@
 - 4.4 CLI integration test validates viewer server lifecycle (--viewer --no-open).
 - Note: Unit tests use CJS-transformed modules from dist/viewer-cjs/; CLI integration passes.
 
+[2025-08-14] Phase 5:
+- 5.1 Verified dist/viewer/** included in npm tarball via files field.
+- 5.2 Updated README with viewer section; documented flags, usage, privacy.
+- 5.3 Bumped version to 0.11.0; added CHANGELOG.md with viewer feature.
+
