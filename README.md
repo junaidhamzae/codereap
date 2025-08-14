@@ -64,6 +64,34 @@ codereap [options]
 - `--alwaysLive <globs>` – comma‑separated glob(s) to mark files as live regardless of traversal (relative to `--root`)
  - `--dynamicEdges <on|off>` – treat string‑literal dynamic imports (`import('...')`) as graph edges (default: `on`)
 
+## Built-in Viewer (local)
+
+CodeReap includes a built-in local web viewer for exploring reports interactively. The viewer runs a local static server and opens your browser to display the report in an easy-to-navigate interface.
+
+```bash
+codereap --viewer
+codereap --viewer --port 5173
+codereap --viewer --host 0.0.0.0 --no-open
+```
+
+### Viewer options
+
+- `--viewer` – start the built-in local viewer instead of generating a report
+- `--port <port>` – specify port for the viewer server (default: 0 for ephemeral port)
+- `--host <host>` – specify host for the viewer server (default: 127.0.0.1)
+- `--no-open` – don't automatically open the browser
+
+### Using the viewer
+
+1. Run `codereap --viewer` in your project directory
+2. Your browser will open to the viewer interface
+3. Click "Select a CodeReap JSON report" and choose a previously generated report file (see [Interpreting the report](#interpreting-the-report) for expected JSON structure)
+4. Use the "Explore Tree" tab to browse your project structure with expand/collapse navigation
+5. Use the "Prioritize Pruning" tab to see tables of orphan files/directories sorted by size and other metrics
+6. Use "Copy" buttons to copy file paths for cleanup scripts
+
+**Privacy note**: The viewer runs entirely locally. Your report file is read with JavaScript's FileReader API in your browser and never uploaded anywhere.
+
 ---
 
 ## Examples
