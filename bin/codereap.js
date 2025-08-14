@@ -73,6 +73,10 @@ program
     'Treat string-literal dynamic imports as edges: on or off (default: on)',
     'on'
   )
+  .option('--viewer', 'Start built-in local viewer (serve static UI)')
+  .option('--port <port>', 'Viewer port (default: 0 for ephemeral)')
+  .option('--host <host>', 'Viewer host (default: 127.0.0.1)', '127.0.0.1')
+  .option('--no-open', 'Do not open browser automatically')
   .parse(process.argv);
 
 const options = program.opts();
@@ -81,6 +85,20 @@ async function main() {
   const root = path.resolve(options.root);
 
   const getSrc = (name) => program.getOptionValueSource(name);
+
+  // Viewer short-circuit
+  if (options.viewer) {
+    const { startViewerServer } = require('../dist/viewer/server');
+    const viewer = await startViewerServer({
+      host: options.host || '127.0.0.1',
+      port: options.port ? Number(options.port) : 0,
+      open: options.open !== false,
+    });
+    console.log(`viewer listening on ${viewer.url}`);
+    process.on('SIGINT', async () => { await viewer.close(); process.exit(0); });
+    await new Promise(() => {});
+    return;
+  }
 
   // Load ts/jsconfig baseUrl & paths
   const tsjs = loadTsJsConfig(root);
