@@ -18,7 +18,7 @@
   "scripts": {
     "start": "node bin/codereap.js",
     "build": "tsc",
-    "postbuild": "node scripts/copy-viewer-assets.js && node scripts/esm-to-cjs.js",
+    "postbuild": "node scripts/copy-viewer-assets.js && node scripts/bundle-viewer.js && node scripts/esm-to-cjs.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:unit": "jest tests/unit",
@@ -54,6 +54,7 @@
     "@types/micromatch": "^4.0.9",
     "@types/node": "^24.2.0",
     "@typescript-eslint/parser": "^8.39.0",
+    "esbuild": "^0.25.9",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
     "ts-jest": "^29.4.1",
