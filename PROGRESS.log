@@ -12,3 +12,11 @@
 - 2.1 Added viewer flags (--viewer/--port/--no-open/--host) to CLI parser.
 - 2.2 Implemented short-circuit to static viewer server; prints URL; SIGINT closes cleanly.
 
+[2025-08-14] Phase 3:
+- 3.1 Added state.js.
+- 3.2 Added utils.js.
+- 3.3 Implemented parse.js.
+- 3.4 Implemented tree.js.
+- 3.5 Implemented table.js.
+- 3.6 Wired SPA shell (index.html, styles.css, app.js).
+
