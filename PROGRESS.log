@@ -8,3 +8,7 @@
 - 1.2 Added src/viewer/public placeholders (index.html, app.js, styles.css).
 - 1.3 Added scripts/copy-viewer-assets.js; wired postbuild; assets copied to dist/viewer.
 
+[2025-08-14] Phase 2:
+- 2.1 Added viewer flags (--viewer/--port/--no-open/--host) to CLI parser.
+- 2.2 Implemented short-circuit to static viewer server; prints URL; SIGINT closes cleanly.
+
