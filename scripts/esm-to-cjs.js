@@ -18,11 +18,35 @@ function extractExports(src){
   return Array.from(names);
 }
 
+function rel(mod){
+  // keep relative path but ensure .js extension remains
+  return mod;
+}
+
 function transformToCjs(src){
   const names = extractExports(src);
   let out = src;
+  // transform ESM imports (named)
+  out = out.replace(/^\s*import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["'];?\s*$/gm, (m, list, mod)=>{
+    const bindings = list.split(',').map(s=>s.trim()).filter(Boolean).map(s=>{
+      if (s.includes(' as ')){
+        const [orig, alias] = s.split(/\s+as\s+/);
+        return `${alias.trim()}: ${orig.trim()}`;
+      }
+      return s;
+    }).join(', ');
+    return `const { ${bindings} } = require('${rel(mod)}');`;
+  });
+  // transform default imports
+  out = out.replace(/^\s*import\s+([A-Za-z_$][\w$]*)\s+from\s*["']([^"']+)["'];?\s*$/gm, (m, id, mod)=>{
+    return `const ${id} = require('${rel(mod)}');`;
+  });
+  // transform namespace imports
+  out = out.replace(/^\s*import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']([^"']+)["'];?\s*$/gm, (m, ns, mod)=>{
+    return `const ${ns} = require('${rel(mod)}');`;
+  });
   out = out.replace(/^\s*export\s+const\s+(\w+)\s*=/gm, 'const $1 =');
-  out = out.replace(/^\s*export\s+function\s+(\w+)\s*\(/gm, 'function $1(');
+  out = out.replace(/^\s*export\s+(?:async\s+)?function\s+(\w+)\s*\(/gm, (m, name)=> m.replace(/^\s*export\s+/, ''));
   out = out.replace(/^\s*export\s*\{[^}]+\}\s*;?\s*$/gm, '');
   if (names.length){
     out += '\n\n// CJS re-exports\n';
@@ -37,7 +61,7 @@ async function main(){
   if (!fs.existsSync(inDir)) return;
   await fsp.rm(outDir, { recursive: true, force: true }).catch(()=>{});
   await fsp.mkdir(outDir, { recursive: true });
-  const files = ['state.js','parse.js','tree.js','table.js'];
+  const files = ['state.js','parse.js','tree.js','table.js','utils.js'];
   for (const f of files){
     const srcPath = path.join(inDir, f);
     if (!fs.existsSync(srcPath)) continue;

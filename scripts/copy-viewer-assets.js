@@ -27,6 +27,9 @@ async function main(){
   const outRoot = path.resolve(__dirname, '../dist/viewer');
   if (!fs.existsSync(srcRoot)) return;
   await ensureDir(outRoot);
+  // Remove stale ESM package marker if present from prior builds
+  const stalePkg = path.join(outRoot, 'package.json');
+  if (fs.existsSync(stalePkg)) { try { await fsp.unlink(stalePkg); } catch (_) {} }
   // Prefer fs.cp when available for efficiency
   if (typeof fs.cp === 'function'){
     await new Promise((resolve, reject)=>{
@@ -35,9 +38,7 @@ async function main(){
   } else {
     await copyRecursive(srcRoot, outRoot);
   }
-  // Ensure Node treats dist/viewer/*.js as ESM for tests and tooling
-  const pkgPath = path.join(outRoot, 'package.json');
-  await fsp.writeFile(pkgPath, JSON.stringify({ type: 'module' }, null, 2));
+  // Note: do not write a package.json with type:module here; server.js in this folder is CJS
 }
 
 main().catch((err)=>{ console.error(err); process.exit(1); });

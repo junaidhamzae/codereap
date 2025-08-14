@@ -6,6 +6,15 @@ const config: Config = {
   roots: ['<rootDir>/tests'],
   collectCoverage: true,
   collectCoverageFrom: ['src/**/*.ts'],
+  transformIgnorePatterns: ['/dist/viewer/'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', { useESM: true }],
+  },
   coverageThreshold: {
     global: {
       branches: 75,
@@ -14,7 +23,7 @@ const config: Config = {
       statements: 95,
     },
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'json', 'mjs'],
   verbose: false,
 };
 

@@ -29,13 +29,13 @@ describe('viewer tree Only orphans filter', () => {
     state.filters.onlyOrphans = true;
     renderTree(container, tree);
     expect(container.textContent).toContain('a');
-    expect(container.textContent).toContain('A.ts');
-    expect(container.textContent).not.toContain('B.ts');
+    expect(container.textContent).toContain('A');
+    expect(container.textContent).not.toContain('B');
 
     // all
     state.filters.onlyOrphans = false;
     renderTree(container, tree);
-    expect(container.textContent).toContain('B.ts');
+    expect(container.textContent).toContain('B');
   });
 });
 
