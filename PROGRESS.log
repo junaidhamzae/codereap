@@ -1,0 +1,10 @@
+[2025-08-14] Phase 1:
+- 1.1 Created src/viewer/server.ts exporting startViewerServer; build OK.
+- 1.2 Added src/viewer/public placeholders (index.html, app.js, styles.css).
+- 1.3 Added scripts/copy-viewer-assets.js; wired postbuild; assets copied to dist/viewer.
+
+[2025-08-14] Phase 1:
+- 1.1 Created src/viewer/server.ts exporting startViewerServer; build OK.
+- 1.2 Added src/viewer/public placeholders (index.html, app.js, styles.css).
+- 1.3 Added scripts/copy-viewer-assets.js; wired postbuild; assets copied to dist/viewer.
+
