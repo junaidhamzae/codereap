@@ -6,7 +6,6 @@ const config: Config = {
   roots: ['<rootDir>/tests'],
   collectCoverage: true,
   collectCoverageFrom: ['src/**/*.ts'],
-  extensionsToTreatAsEsm: ['.js'],
   coverageThreshold: {
     global: {
       branches: 75,
