@@ -18,6 +18,7 @@
   "scripts": {
     "start": "node bin/codereap.js",
     "build": "tsc",
+    "postbuild": "node scripts/copy-viewer-assets.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:unit": "jest tests/unit",

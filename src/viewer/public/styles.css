@@ -1,0 +1,8 @@
+:root{ --orphan-red:#c62828; --header-bg:#0f172a; --fg:#0b1020; --bg:#ffffff; }
+html,body{ height:100%; margin:0; padding:0; }
+body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color: var(--fg); background: var(--bg); }
+#landing{ display:grid; place-items:center; min-height:100vh; gap:12px; }
+h1{ font-size:1.25rem; margin:0; }
+.orphan{ color: var(--orphan-red); }
+
+
