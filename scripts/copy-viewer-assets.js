@@ -35,6 +35,9 @@ async function main(){
   } else {
     await copyRecursive(srcRoot, outRoot);
   }
+  // Ensure Node treats dist/viewer/*.js as ESM for tests and tooling
+  const pkgPath = path.join(outRoot, 'package.json');
+  await fsp.writeFile(pkgPath, JSON.stringify({ type: 'module' }, null, 2));
 }
 
 main().catch((err)=>{ console.error(err); process.exit(1); });
