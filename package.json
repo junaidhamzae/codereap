@@ -18,7 +18,7 @@
   "scripts": {
     "start": "node bin/codereap.js",
     "build": "tsc",
-    "postbuild": "node scripts/copy-viewer-assets.js",
+    "postbuild": "node scripts/copy-viewer-assets.js && node scripts/esm-to-cjs.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:unit": "jest tests/unit",
