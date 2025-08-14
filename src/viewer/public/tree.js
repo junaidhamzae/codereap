@@ -27,11 +27,16 @@ export function renderTree(container, tree){
   function nodeRow(node, depth){
     const r = node.payload;
     const orphan = !!r?.orphan;
-    if (only && !orphan && node.kind!=='dir') return null;
+    const path = r ? (r.directory || r.node) : node.name;
+    const matchesSearch = !state.search || path.toLowerCase().includes(state.search.toLowerCase());
+    if ((only && !orphan && node.kind!=='dir') || !matchesSearch) return null;
     const row = document.createElement('div'); row.className='row'; row.style.paddingLeft = `${depth*12}px`;
     const btn = document.createElement('button'); btn.textContent = node.children.size ? '▸' : '•';
     const label = document.createElement('span'); label.textContent = node.name; if (orphan) label.classList.add('orphan');
-    const copy = document.createElement('button'); copy.textContent = 'Copy';
+    const copy = document.createElement('button');
+    copy.className = 'copy-btn';
+    copy.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+    copy.title = 'Copy path to clipboard';
     copy.onclick = () => copyText(r ? (r.directory || r.node) : node.name);
     const tip = document.createElement('span'); tip.className='tip';
     if (r){
@@ -42,18 +47,28 @@ export function renderTree(container, tree){
     }
     const header = document.createElement('div'); header.className='row-head';
     header.append(btn,label,copy,tip);
-    frag.append(header);
+    row.appendChild(header);
+    frag.appendChild(row);
     let expanded = false;
     if (node.children.size){
       const toggle = () => {
         expanded = !expanded; btn.textContent = expanded ? '▾' : '▸';
         if (expanded){
           for(const child of node.children.values()){
-            const childRow = nodeRow(child, depth+1); if (childRow) {}
+            const childRow = nodeRow(child, depth+1);
+            if (childRow) {
+              // Insert child row after the current row
+              row.parentNode.insertBefore(childRow, row.nextSibling);
+            }
           }
         } else {
-          // re-render entire tree lazily to avoid deep DOM operations
-          renderTree(container, tree);
+          // Remove all child rows
+          let next = row.nextSibling;
+          while (next && next.style.paddingLeft > row.style.paddingLeft) {
+            const toRemove = next;
+            next = next.nextSibling;
+            toRemove.remove();
+          }
         }
       };
       btn.onclick = toggle;

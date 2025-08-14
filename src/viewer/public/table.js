@@ -28,7 +28,7 @@ export function renderFileControls(ctrlEl, rows, onChange){
   ctrlEl.textContent=''; const wrap = document.createElement('div'); wrap.className='controls';
   const extWrap = document.createElement('div'); extWrap.className='exts';
   exts.forEach(x=>{
-    const id=`ext-${x}`; const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=false;
+    const id=`ext-${x}`; const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=state.filters.extensions.includes(x);
     cb.onchange=()=>{ 
       const selected = Array.from(extWrap.querySelectorAll('input:checked')).map(i=>i.id.replace('ext-',''));
       onChange({extensions:selected});
@@ -37,6 +37,7 @@ export function renderFileControls(ctrlEl, rows, onChange){
     const d=document.createElement('div'); d.className='ext'; d.append(cb,lab); extWrap.append(d);
   });
   const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeFirst">Size-First (Heaviest Orphans)</option><option value="leafOrphanFirst">Leaf-Orphan First</option><option value="maxExportsOrphanFirst">Max-Exports-Orphan First</option>';
+  sortSel.value = state.sortFiles;
   sortSel.onchange=()=>onChange({sort:sortSel.value});
   const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
   wrap.append(extWrap, sortSel, copyBtn); ctrlEl.append(wrap);
@@ -50,6 +51,7 @@ export function renderFileControls(ctrlEl, rows, onChange){
 export function renderFileTable(tbodyEl, rows, filters, sortKey){
   let cur = rows.filter(r => r.orphan === true); // default orphan===true
   if (filters.extensions?.length){ cur = cur.filter(r => filters.extensions.includes(extOf(r.node))); }
+  if (state.search){ cur = cur.filter(r => r.node.toLowerCase().includes(state.search.toLowerCase())); }
   const sorter = fileSorts[sortKey || 'sizeFirst']; cur = cur.sort(sorter);
   tbodyEl.textContent='';
   for(const r of cur){
@@ -66,12 +68,13 @@ export function renderFileTable(tbodyEl, rows, filters, sortKey){
 export function renderDirControls(ctrlEl, rows, onChange){
   ctrlEl.textContent='';
   const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeDesc">Largest by size first</option><option value="fileCountDesc">High file count first</option><option value="quickWins">Quick wins</option><option value="segment">Path segmented clean up</option>';
-  const segmentSel=document.createElement('select'); segmentSel.style.display='none';
+  sortSel.value = state.sortDirs;
+  const segmentSel=document.createElement('select'); segmentSel.style.display = state.sortDirs==='segment' ? '' : 'none';
   sortSel.onchange=()=>{
     segmentSel.style.display = sortSel.value==='segment' ? '' : 'none';
     if (sortSel.value==='segment'){
       const segs = Array.from(new Set(rows.map(r=>firstSegment(r.directory)))).sort();
-      segmentSel.innerHTML = '<option value="">(Select segment)</option>' + segs.map(s=>`<option>${s}</option>`).join('');
+      segmentSel.innerHTML = '<option value="">(Select segment)</option>' + segs.map(s=>`<option value="${s}"${s===state.segment?' selected':''}>${s}</option>`).join('');
     }
     onChange({sort:sortSel.value, segment: segmentSel.value});
   };
@@ -85,8 +88,15 @@ export function renderDirControls(ctrlEl, rows, onChange){
   }
 }
 
+// TODO: Implement row expansion to show exports and imports
+function toggleExpand(tr, record) {
+  // No-op stub for future expansion logic
+  // Will show exports and imports[].resolved when implemented
+}
+
 export function renderDirTable(tbodyEl, rows, sortKey, segment){
   let cur = rows.filter(r => r.orphan === true); // hard filter
+  if (state.search){ cur = cur.filter(r => r.directory.toLowerCase().includes(state.search.toLowerCase())); }
   const key = sortKey || 'sizeDesc';
   if (key==='segment' && segment){ cur = cur.filter(r => firstSegment(r.directory) === segment); }
   const sorters = {
@@ -99,8 +109,8 @@ export function renderDirTable(tbodyEl, rows, sortKey, segment){
   tbodyEl.textContent='';
   for(const r of cur){
     const tr=document.createElement('tr'); tr.setAttribute('data-path', r.directory);
-    tr.innerHTML = `<td>${r.directory}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy">Copy</button></td>`;
-    tr.querySelector('.copy').onclick = (e)=>{ e.stopPropagation(); copyText(r.directory); };
+    tr.innerHTML = `<td>${r.directory}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy-btn" title="Copy path to clipboard"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></td>`;
+    tr.querySelector('.copy-btn').onclick = (e)=>{ e.stopPropagation(); copyText(r.directory); };
     tbodyEl.appendChild(tr);
   }
 }
