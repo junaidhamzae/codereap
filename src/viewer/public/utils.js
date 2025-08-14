@@ -39,4 +39,28 @@ function showToast(message, isError=false) {
 }
 export function firstSegment(p){ const ix = p.indexOf('/'); return ix<0? p : p.slice(0,ix); }
 
+export function highlightMatches(text, search) {
+  if (!search) return text;
+  const searchLower = search.toLowerCase();
+  const textLower = text.toLowerCase();
+  const parts = [];
+  let lastIndex = 0;
+  let index = textLower.indexOf(searchLower);
+  while (index !== -1) {
+    // Add text before match
+    if (index > lastIndex) {
+      parts.push(text.slice(lastIndex, index));
+    }
+    // Add highlighted match
+    parts.push(`<mark>${text.slice(index, index + search.length)}</mark>`);
+    lastIndex = index + search.length;
+    index = textLower.indexOf(searchLower, lastIndex);
+  }
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.join('');
+}
+
 

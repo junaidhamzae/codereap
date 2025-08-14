@@ -54,7 +54,55 @@
         </table>
       </div>
     </section>
-    <script type="module" src="/app.js"></script>
+    <script>
+      function showError(title, message) {
+        const landing = document.getElementById('landing');
+        landing.innerHTML = `
+          <h1>${title}</h1>
+          <p class="error-message">${message}</p>
+          <ul>
+            <li>Run <code>codereap --viewer</code> to start the viewer server</li>
+            <li>Use <code>--viewer --port 3000</code> to specify a port</li>
+            <li>Or serve this directory over HTTP using any web server</li>
+          </ul>
+        `;
+      }
+
+      // Detect file:// protocol
+      if (window.location.protocol === 'file:') {
+        // Load bundled version for file:// protocol
+        const script = document.createElement('script');
+        script.src = 'app.bundle.js';
+        script.onerror = () => {
+          showError(
+            'Error Loading Viewer',
+            'The viewer cannot be loaded directly from disk due to browser security restrictions. Please use one of these options:'
+          );
+        };
+        document.body.appendChild(script);
+      } else {
+        // Load ESM version for HTTP
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = '/app.js';
+        script.onerror = () => {
+          showError(
+            'Error Loading Viewer',
+            'Failed to load the viewer modules. This could be due to network issues or missing files. Please try:'
+          );
+        };
+        document.body.appendChild(script);
+      }
+
+      // Global error handler for runtime errors
+      window.onerror = (msg, src, line, col, error) => {
+        showError(
+          'Viewer Error',
+          'An error occurred while running the viewer. This might be due to an incompatible browser or missing features. Error: ' + msg
+        );
+        return false; // Let the error propagate
+      };
+    </script>
   </body>
   </html>
 

@@ -47,43 +47,96 @@ async function onPickFile(file){
       alert(e.message);
       return;
     }
-    setReport({ filename: filenameOf(file) }, parsed.rows, parsed.type);
-    reportName.textContent = filenameOf(file);
-    changeBtn.style.display = '';
-    setTab('tree');
-    rerender();
-    showApp();
+
+    // Show loading for large reports
+    const isLargeReport = parsed.rows.length > 1000;
+    if (isLargeReport) {
+      showToast('Processing large report...');
+    }
+
+    // Use requestIdleCallback or setTimeout to defer heavy processing
+    const process = () => new Promise(resolve => {
+      const fn = window.requestIdleCallback || (cb => setTimeout(cb, 0));
+      fn(() => {
+        setReport({ filename: filenameOf(file) }, parsed.rows, parsed.type);
+        reportName.textContent = filenameOf(file);
+        changeBtn.style.display = '';
+        setTab('tree');
+        rerender();
+        showApp();
+        resolve();
+      });
+    });
+
+    await process();
   } finally {
     showLoading(false);
   }
 }
 
+let renderTimeout;
 function rerender(){
-  // tabs
+  // Clear any pending render
+  clearTimeout(renderTimeout);
+
+  // Update tabs immediately
   tabTree.classList.toggle('active', state.tab==='tree');
   tabPrune.classList.toggle('active', state.tab==='prune');
   document.getElementById('treePane').style.display = state.tab==='tree' ? '' : 'none';
   document.getElementById('prunePane').style.display = state.tab==='prune' ? '' : 'none';
 
-  if (state.tab==='tree'){
-    const tree = buildTree(state.dataset);
-    renderTree(treeContainer, tree);
-  } else {
-    if (state.reportType==='file'){
+  // Debounce heavy rendering
+  renderTimeout = setTimeout(() => {
+    if (state.tab==='tree'){
+      const tree = buildTree(state.dataset);
+      renderTree(treeContainer, tree);
+    } else {
+      if (state.reportType==='file'){
+              // Preserve current sort and extension filters
+      const currentSort = state.sortFiles;
+      const currentExts = [...state.filters.extensions];
+
       renderFileControls(pruneControls, state.dataset, ({extensions, sort})=>{
         if (extensions) setExtensions(extensions);
         if (sort) setSortFiles(sort);
         rerender();
       });
-      renderFileTable(pruneTbody, state.dataset, state.filters, state.sortFiles);
-    } else {
-      renderDirControls(pruneControls, state.dataset, ({sort, segment})=>{
-        setSortDirs(sort, segment);
-        rerender();
+
+      // Restore sort and extension selections
+      const sortSelect = pruneControls.querySelector('select');
+      if (sortSelect) sortSelect.value = currentSort;
+
+      const extChecks = pruneControls.querySelectorAll('input[type="checkbox"]');
+      extChecks.forEach(cb => {
+        const ext = cb.id.replace('ext-', '');
+        cb.checked = currentExts.includes(ext);
       });
-      renderDirTable(pruneTbody, state.dataset, state.sortDirs, state.segment);
+
+      renderFileTable(pruneTbody, state.dataset, state.filters, state.sortFiles);
+      } else {
+        // Preserve current sort and segment selections
+        const currentSort = state.sortDirs;
+        const currentSegment = state.segment;
+
+        renderDirControls(pruneControls, state.dataset, ({sort, segment})=>{
+          setSortDirs(sort, segment);
+          rerender();
+        });
+
+        // Restore sort and segment selections
+        const sortSelect = pruneControls.querySelector('select');
+        if (sortSelect) sortSelect.value = currentSort;
+
+        const segmentSelect = pruneControls.querySelector('select:nth-child(2)');
+        if (segmentSelect && currentSort === 'segment') {
+          segmentSelect.style.display = '';
+          segmentSelect.value = currentSegment;
+        }
+
+        renderDirTable(pruneTbody, state.dataset, state.sortDirs, state.segment);
+      }
     }
-  }
+  }, 100); // Small delay to batch rapid updates
 }
 
 // wire events
@@ -91,7 +144,19 @@ fileInput.addEventListener('change', (e) => {
   const f = /** @type {HTMLInputElement} */ (e.target).files?.[0];
   if (f) onPickFile(f);
 });
-changeBtn.addEventListener('click', () => { resetState(); reportName.textContent=''; changeBtn.style.display='none'; showLanding(); });
+
+// Reset state and UI when changing report
+changeBtn.addEventListener('click', () => {
+  // Clear all state
+  resetState();
+  // Reset UI elements
+  reportName.textContent = '';
+  changeBtn.style.display = 'none';
+  searchInput.value = '';
+  onlyOrphans.checked = false;
+  // Return to landing
+  showLanding();
+});
 function switchTab(tab) {
   setTab(tab);
   const isTree = tab === 'tree';

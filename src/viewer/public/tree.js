@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { humanBytes, copyText } from './utils.js';
+import { humanBytes, copyText, highlightMatches } from './utils.js';
 
 function segs(p){ return p.split('/').filter(Boolean); }
 
@@ -20,19 +20,90 @@ export function buildTree(rows){
   return root;
 }
 
+function handleTreeKeydown(e, row, tree) {
+  const rows = Array.from(document.querySelectorAll('#treeContainer .row'));
+  const currentIndex = rows.indexOf(row);
+  const expandBtn = row.querySelector('button:first-child');
+  const copyBtn = row.querySelector('.copy-btn');
+
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault();
+      if (currentIndex < rows.length - 1) {
+        rows[currentIndex + 1].focus();
+      }
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if (currentIndex > 0) {
+        rows[currentIndex - 1].focus();
+      }
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      if (expandBtn && expandBtn.textContent === '▸') {
+        expandBtn.click();
+      }
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (expandBtn && expandBtn.textContent === '▾') {
+        expandBtn.click();
+      }
+      break;
+    case 'Enter':
+    case ' ':
+      e.preventDefault();
+      if (document.activeElement === copyBtn) {
+        copyBtn.click();
+      } else if (expandBtn) {
+        expandBtn.click();
+      }
+      break;
+  }
+}
+
 export function renderTree(container, tree){
   container.textContent = '';
   const only = state.filters.onlyOrphans;
   const frag = document.createDocumentFragment();
+  let hasVisibleNodes = false;
+  function hasMatchingDescendant(node) {
+    if (!state.search) return false;
+    const searchLower = state.search.toLowerCase();
+    const path = node.payload ? (node.payload.directory || node.payload.node) : node.name;
+    if (path.toLowerCase().includes(searchLower)) return true;
+    for (const child of node.children.values()) {
+      if (hasMatchingDescendant(child)) return true;
+    }
+    return false;
+  }
+
   function nodeRow(node, depth){
     const r = node.payload;
     const orphan = !!r?.orphan;
     const path = r ? (r.directory || r.node) : node.name;
     const matchesSearch = !state.search || path.toLowerCase().includes(state.search.toLowerCase());
-    if ((only && !orphan && node.kind!=='dir') || !matchesSearch) return null;
-    const row = document.createElement('div'); row.className='row'; row.style.paddingLeft = `${depth*12}px`;
-    const btn = document.createElement('button'); btn.textContent = node.children.size ? '▸' : '•';
-    const label = document.createElement('span'); label.textContent = node.name; if (orphan) label.classList.add('orphan');
+    const hasMatchingChild = hasMatchingDescendant(node);
+    if ((only && !orphan && node.kind!=='dir') || (!matchesSearch && !hasMatchingChild)) return null;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.paddingLeft = `${depth*12}px`;
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('aria-level', (depth + 1).toString());
+    row.setAttribute('aria-expanded', 'false');
+    row.onkeydown = (e) => handleTreeKeydown(e, row, tree);
+    const btn = document.createElement('button');
+    btn.setAttribute('aria-label', node.children.size ? 'Expand' : 'Leaf node');
+    btn.textContent = node.children.size ? '▸' : '•';
+    if (hasMatchingChild) {
+      btn.classList.add('has-matches');
+      btn.title = 'Contains matching items';
+    }
+    const label = document.createElement('span');
+    label.innerHTML = highlightMatches(node.name, state.search);
+    if (orphan) label.classList.add('orphan');
     const copy = document.createElement('button');
     copy.className = 'copy-btn';
     copy.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
@@ -52,7 +123,10 @@ export function renderTree(container, tree){
     let expanded = false;
     if (node.children.size){
       const toggle = () => {
-        expanded = !expanded; btn.textContent = expanded ? '▾' : '▸';
+        expanded = !expanded;
+        btn.textContent = expanded ? '▾' : '▸';
+        btn.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
+        row.setAttribute('aria-expanded', expanded.toString());
         if (expanded){
           for(const child of node.children.values()){
             const childRow = nodeRow(child, depth+1);
@@ -73,10 +147,22 @@ export function renderTree(container, tree){
       };
       btn.onclick = toggle;
     }
+    hasVisibleNodes = true;
     return row;
   }
   for(const child of tree.children.values()){ nodeRow(child, 0); }
-  container.appendChild(frag);
+  if (!hasVisibleNodes) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = state.search
+      ? 'No files or directories match your search'
+      : only
+        ? 'No orphaned files or directories found'
+        : 'No files or directories found';
+    container.appendChild(empty);
+  } else {
+    container.appendChild(frag);
+  }
 }
 
 

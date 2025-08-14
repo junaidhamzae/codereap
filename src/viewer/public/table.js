@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { humanBytes, extOf, copyText, firstSegment } from './utils.js';
+import { humanBytes, extOf, copyText, firstSegment, highlightMatches } from './utils.js';
 
 // Sorting strategies
 export const fileSorts = {
@@ -36,7 +36,12 @@ export function renderFileControls(ctrlEl, rows, onChange){
     const lab=document.createElement('label'); lab.htmlFor=id; lab.textContent=x;
     const d=document.createElement('div'); d.className='ext'; d.append(cb,lab); extWrap.append(d);
   });
-  const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeFirst">Size-First (Heaviest Orphans)</option><option value="leafOrphanFirst">Leaf-Orphan First</option><option value="maxExportsOrphanFirst">Max-Exports-Orphan First</option>';
+  const sortSel=document.createElement('select');
+  sortSel.innerHTML = `
+    <option value="sizeFirst" title="Sort by file size (largest first) to identify high-impact files">By size (descending)</option>
+    <option value="leafOrphanFirst" title="Sort by in-degree (0 first) then size to find unused leaf files">By leaf orphan count</option>
+    <option value="maxExportsOrphanFirst" title="Sort by ratio of orphaned exports to total exports to find partially used modules">By export orphan ratio</option>
+  `;
   sortSel.value = state.sortFiles;
   sortSel.onchange=()=>onChange({sort:sortSel.value});
   const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
@@ -49,25 +54,51 @@ export function renderFileControls(ctrlEl, rows, onChange){
 }
 
 export function renderFileTable(tbodyEl, rows, filters, sortKey){
-  let cur = rows.filter(r => r.orphan === true); // default orphan===true
+  let cur = rows;
+  if (filters.onlyOrphans) {
+    cur = cur.filter(r => r.orphan === true);
+  }
   if (filters.extensions?.length){ cur = cur.filter(r => filters.extensions.includes(extOf(r.node))); }
   if (state.search){ cur = cur.filter(r => r.node.toLowerCase().includes(state.search.toLowerCase())); }
   const sorter = fileSorts[sortKey || 'sizeFirst']; cur = cur.sort(sorter);
   tbodyEl.textContent='';
+  if (cur.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.className = 'empty-state';
+    td.textContent = state.search
+      ? 'No files match your search'
+      : state.filters.onlyOrphans
+        ? 'No orphaned files found'
+        : 'No files found';
+    tr.appendChild(td);
+    tbodyEl.appendChild(tr);
+    return;
+  }
   for(const r of cur){
     const tr=document.createElement('tr'); tr.setAttribute('data-path', r.node);
     const ex = r.symbols?.exports;
     const total = ex ? ((ex.default?1:0) + (ex.named?.length||0)) : 0;
     const orphanTotal = ex ? ((ex.default?.orphan?1:0) + (ex.named?.filter(n=>n.orphan).length||0)) : 0;
-    tr.innerHTML = `<td>${r.node}</td><td>${humanBytes(r['size-bytes'])}</td><td>${r['in-degree']??'–'}</td><td>${ex? `${orphanTotal}/${total}` : '–'}</td>`;
+    tr.innerHTML = `<td>${highlightMatches(r.node, state.search)}</td><td>${humanBytes(r['size-bytes'])}</td><td>${r['in-degree']??'–'}</td><td>${ex? `${orphanTotal}/${total}` : '–'}</td>`;
+    if (r.orphan) tr.classList.add('orphan');
     tr.onclick = ()=>toggleExpand(tr, r);
+    tr.setAttribute('aria-expanded', 'false');
+    tr.style.cursor = 'pointer';
     tbodyEl.appendChild(tr);
   }
 }
 
 export function renderDirControls(ctrlEl, rows, onChange){
   ctrlEl.textContent='';
-  const sortSel=document.createElement('select'); sortSel.innerHTML='<option value="sizeDesc">Largest by size first</option><option value="fileCountDesc">High file count first</option><option value="quickWins">Quick wins</option><option value="segment">Path segmented clean up</option>';
+  const sortSel=document.createElement('select');
+  sortSel.innerHTML = `
+    <option value="sizeDesc" title="Sort by total size (largest first) to identify high-impact directories">By total size (descending)</option>
+    <option value="fileCountDesc" title="Sort by number of files (most first) to find dense directories">By file count (descending)</option>
+    <option value="quickWins" title="Sort by total size (smallest first) to find easy cleanup targets">Quick wins (small first)</option>
+    <option value="segment" title="Group by top-level directory and sort by size to organize cleanup">By directory segment</option>
+  `;
   sortSel.value = state.sortDirs;
   const segmentSel=document.createElement('select'); segmentSel.style.display = state.sortDirs==='segment' ? '' : 'none';
   sortSel.onchange=()=>{
@@ -88,14 +119,82 @@ export function renderDirControls(ctrlEl, rows, onChange){
   }
 }
 
-// TODO: Implement row expansion to show exports and imports
 function toggleExpand(tr, record) {
-  // No-op stub for future expansion logic
-  // Will show exports and imports[].resolved when implemented
+  const existingDetail = tr.nextElementSibling;
+  const isExpanded = tr.getAttribute('aria-expanded') === 'true';
+
+  // Remove existing detail row if collapsing
+  if (isExpanded && existingDetail?.classList.contains('detail-row')) {
+    existingDetail.remove();
+    tr.setAttribute('aria-expanded', 'false');
+    return;
+  }
+
+  // Create detail row
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'detail-row';
+  const detailCell = document.createElement('td');
+  detailCell.colSpan = 4;
+
+  // Build exports section
+  const ex = record.symbols?.exports;
+  if (ex) {
+    const exportsDiv = document.createElement('div');
+    exportsDiv.className = 'exports-section';
+    exportsDiv.innerHTML = '<h4>Exports</h4>';
+
+    if (ex.default) {
+      const defaultDiv = document.createElement('div');
+      defaultDiv.className = `export-item${ex.default.orphan ? ' orphan' : ''}`;
+      defaultDiv.textContent = 'default';
+      exportsDiv.appendChild(defaultDiv);
+    }
+
+    if (ex.named?.length) {
+      const namedList = document.createElement('div');
+      namedList.className = 'export-list';
+      ex.named.forEach(n => {
+        const item = document.createElement('div');
+        item.className = `export-item${n.orphan ? ' orphan' : ''}`;
+        item.textContent = n.name;
+        namedList.appendChild(item);
+      });
+      exportsDiv.appendChild(namedList);
+    }
+
+    detailCell.appendChild(exportsDiv);
+  }
+
+  // Build imports section
+  const imports = record.imports?.filter(i => i.resolved);
+  if (imports?.length) {
+    const importsDiv = document.createElement('div');
+    importsDiv.className = 'imports-section';
+    importsDiv.innerHTML = '<h4>Imports</h4>';
+
+    const importsList = document.createElement('div');
+    importsList.className = 'import-list';
+    imports.forEach(i => {
+      const item = document.createElement('div');
+      item.className = 'import-item';
+      const path = i.resolved;
+      item.innerHTML = `<span>${path}</span><button class="copy-btn" title="Copy path" onclick="event.stopPropagation(); navigator.clipboard.writeText('${path}')"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>`;
+      importsList.appendChild(item);
+    });
+    importsDiv.appendChild(importsList);
+    detailCell.appendChild(importsDiv);
+  }
+
+  detailRow.appendChild(detailCell);
+  tr.after(detailRow);
+  tr.setAttribute('aria-expanded', 'true');
 }
 
 export function renderDirTable(tbodyEl, rows, sortKey, segment){
-  let cur = rows.filter(r => r.orphan === true); // hard filter
+  let cur = rows;
+  if (state.filters.onlyOrphans) {
+    cur = cur.filter(r => r.orphan === true);
+  }
   if (state.search){ cur = cur.filter(r => r.directory.toLowerCase().includes(state.search.toLowerCase())); }
   const key = sortKey || 'sizeDesc';
   if (key==='segment' && segment){ cur = cur.filter(r => firstSegment(r.directory) === segment); }
@@ -107,9 +206,24 @@ export function renderDirTable(tbodyEl, rows, sortKey, segment){
   };
   cur = cur.sort(sorters[key]);
   tbodyEl.textContent='';
+  if (cur.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.className = 'empty-state';
+    td.textContent = state.search
+      ? 'No directories match your search'
+      : state.filters.onlyOrphans
+        ? 'No orphaned directories found'
+        : 'No directories found';
+    tr.appendChild(td);
+    tbodyEl.appendChild(tr);
+    return;
+  }
   for(const r of cur){
     const tr=document.createElement('tr'); tr.setAttribute('data-path', r.directory);
-    tr.innerHTML = `<td>${r.directory}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy-btn" title="Copy path to clipboard"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></td>`;
+    tr.innerHTML = `<td>${highlightMatches(r.directory, state.search)}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy-btn" title="Copy path to clipboard"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></td>`;
+    if (r.orphan) tr.classList.add('orphan');
     tr.querySelector('.copy-btn').onclick = (e)=>{ e.stopPropagation(); copyText(r.directory); };
     tbodyEl.appendChild(tr);
   }

@@ -21,6 +21,25 @@ html,body{ height:100%; margin:0; padding:0; }
 body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; color: var(--fg); background: var(--bg); }
 #landing{ display:grid; place-items:center; min-height:100vh; gap:12px; }
 .card{ padding:24px; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+
+.error-message {
+  color: var(--error);
+  margin: 16px 0;
+}
+
+code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+ul {
+  margin: 16px 0;
+  padding-left: 24px;
+  line-height: 1.6;
+}
 h1{ font-size:1.25rem; margin:0; }
 .orphan{ color: var(--orphan-red); }
 
@@ -98,6 +117,33 @@ nav.tabs button {
   cursor: pointer;
 }
 
+select {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  background: white;
+}
+
+select option {
+  padding: 8px;
+}
+
+select option[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 100%;
+  margin-left: 8px;
+  padding: 8px 12px;
+  background: #1f2937;
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  max-width: 280px;
+  white-space: normal;
+  z-index: 30;
+}
+
 nav.tabs button.active {
   background: #111827;
   color: white;
@@ -161,7 +207,27 @@ nav.tabs button.active {
 #treePane, #prunePane {
   padding: 12px 16px;
 }
-#treeContainer .row-head{ display:flex; align-items:center; gap:8px; padding:2px 0; }
+#treeContainer .row {
+  outline: none;
+}
+
+#treeContainer .row:focus-visible {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#treeContainer .row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  #treeContainer .row:focus-visible {
+    background: #1e293b;
+  }
+}
 
 .copy-btn {
   display: inline-flex;
@@ -188,6 +254,17 @@ nav.tabs button.active {
 .copy-btn svg {
   display: block;
 }
+
+button.has-matches {
+  color: #6366f1;
+  font-weight: bold;
+}
+
+@media (prefers-color-scheme: dark) {
+  button.has-matches {
+    color: #818cf8;
+  }
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -210,6 +287,93 @@ thead th, tbody td {
   border-bottom: 1px solid #e5e7eb;
   padding: 6px 8px;
   text-align: left;
+}
+
+tr.orphan td:first-child {
+  color: var(--orphan-red);
+}
+
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .empty-state {
+    color: #94a3b8;
+  }
+}
+
+mark {
+  background: #fef9c3;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  mark {
+    background: #854d0e;
+  }
+}
+
+tr[aria-expanded="true"] {
+  background: #f8fafc;
+}
+
+.detail-row td {
+  padding: 12px 16px;
+  background: #f8fafc;
+}
+
+.exports-section, .imports-section {
+  margin: 8px 0;
+}
+
+.exports-section h4, .imports-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.export-list, .import-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.export-item, .import-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.export-item.orphan {
+  color: var(--orphan-red);
+  border-color: var(--orphan-red);
+}
+
+.import-item {
+  padding-right: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  tr[aria-expanded="true"],
+  .detail-row td {
+    background: #1e293b;
+  }
+
+  .export-item, .import-item {
+    background: #0f172a;
+    border-color: #334155;
+  }
 }
 
 @media (max-width: 768px) {
