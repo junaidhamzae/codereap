@@ -26,16 +26,10 @@ export function renderFileControls(ctrlEl, rows, onChange){
   // dynamic extension checkboxes
   const exts = Array.from(new Set(rows.map(r=>extOf(r.node)).filter(Boolean))).sort();
   ctrlEl.textContent=''; const wrap = document.createElement('div'); wrap.className='controls';
-  const extWrap = document.createElement('div'); extWrap.className='exts';
-  exts.forEach(x=>{
-    const id=`ext-${x}`; const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=state.filters.extensions.includes(x);
-    cb.onchange=()=>{ 
-      const selected = Array.from(extWrap.querySelectorAll('input:checked')).map(i=>i.id.replace('ext-',''));
-      onChange({extensions:selected});
-    };
-    const lab=document.createElement('label'); lab.htmlFor=id; lab.textContent=x;
-    const d=document.createElement('div'); d.className='ext'; d.append(cb,lab); extWrap.append(d);
-  });
+  
+  // Strategy dropdown
+  const strategyWrap = document.createElement('div'); strategyWrap.className='strategy';
+  const strategyLabel = document.createElement('label'); strategyLabel.textContent='Strategy:';
   const sortSel=document.createElement('select');
   sortSel.innerHTML = `
     <option value="sizeFirst" title="Sort by file size (largest first) to identify high-impact files">By size (descending)</option>
@@ -44,16 +38,68 @@ export function renderFileControls(ctrlEl, rows, onChange){
   `;
   sortSel.value = state.sortFiles;
   sortSel.onchange=()=>onChange({sort:sortSel.value});
+  strategyWrap.append(strategyLabel, sortSel);
+
+  // Extensions checkboxes
+  const extWrap = document.createElement('div'); extWrap.className='exts';
+  const extLabel = document.createElement('label'); extLabel.textContent='Extensions:';
+  const extBoxes = document.createElement('div'); extBoxes.className='ext-boxes';
+  exts.forEach(x=>{
+    const id=`ext-${x}`;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'checkbox-wrapper';
+    
+    const cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.id=id;
+    cb.checked=state.filters.extensions.includes(x);
+    
+    const lab=document.createElement('label');
+    lab.htmlFor=id;
+    lab.textContent=x;
+    
+    wrapper.append(cb,lab);
+    
+    // Make the entire wrapper clickable
+    wrapper.onclick = (e) => {
+      // Don't handle click if it's directly on the checkbox (let the native behavior work)
+      if (e.target === cb) return;
+      
+      // Toggle checkbox
+      cb.checked = !cb.checked;
+      
+      // Trigger change event
+      const selected = Array.from(extBoxes.querySelectorAll('input:checked')).map(i=>i.id.replace('ext-',''));
+      onChange({extensions:selected});
+    };
+    
+    extBoxes.append(wrapper);
+  });
+  extWrap.append(extLabel, extBoxes);
+
+  // Copy paths button
   const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
-  wrap.append(extWrap, sortSel, copyBtn); ctrlEl.append(wrap);
+  copyBtn.className = 'copy-paths-btn';
+
+  wrap.append(strategyWrap, extWrap, copyBtn); ctrlEl.append(wrap);
 
   function copyVisible(){
     const paths = Array.from(document.querySelectorAll('tbody tr')).map(tr=>tr.getAttribute('data-path')).filter(Boolean);
-    copyText(paths.join('\n'));
+    copyText(paths.join(','));
   }
 }
 
 export function renderFileTable(tbodyEl, rows, filters, sortKey){
+  // Update table headers for file report
+  const thead = tbodyEl.parentElement.querySelector('thead');
+  thead.innerHTML = `
+    <tr>
+      <th scope="col">Path</th>
+      <th scope="col">Size</th>
+      <th scope="col">In-degree</th>
+      <th scope="col">Exports (Orphan/Total)</th>
+    </tr>
+  `;
   let cur = rows;
   if (filters.onlyOrphans) {
     cur = cur.filter(r => r.orphan === true);
@@ -82,7 +128,8 @@ export function renderFileTable(tbodyEl, rows, filters, sortKey){
     const total = ex ? ((ex.default?1:0) + (ex.named?.length||0)) : 0;
     const orphanTotal = ex ? ((ex.default?.orphan?1:0) + (ex.named?.filter(n=>n.orphan).length||0)) : 0;
     tr.innerHTML = `<td>${highlightMatches(r.node, state.search)}</td><td>${humanBytes(r['size-bytes'])}</td><td>${r['in-degree']??'–'}</td><td>${ex? `${orphanTotal}/${total}` : '–'}</td>`;
-    if (r.orphan) tr.classList.add('orphan');
+    // Add orphan class when unchecked and row is orphan
+    if (r.orphan && !state.filters.onlyOrphans) tr.classList.add('orphan');
     tr.onclick = ()=>toggleExpand(tr, r);
     tr.setAttribute('aria-expanded', 'false');
     tr.style.cursor = 'pointer';
@@ -115,7 +162,7 @@ export function renderDirControls(ctrlEl, rows, onChange){
 
   function copyVisible(){
     const paths = Array.from(document.querySelectorAll('tbody tr')).map(tr=>tr.getAttribute('data-path')).filter(Boolean);
-    copyText(paths.join('\n'));
+    copyText(paths.join(','));
   }
 }
 
@@ -191,6 +238,16 @@ function toggleExpand(tr, record) {
 }
 
 export function renderDirTable(tbodyEl, rows, sortKey, segment){
+  // Update table headers for directory report
+  const thead = tbodyEl.parentElement.querySelector('thead');
+  thead.innerHTML = `
+    <tr>
+      <th scope="col">Directory</th>
+      <th scope="col">File Count</th>
+      <th scope="col">Total Size</th>
+      <th scope="col">Actions</th>
+    </tr>
+  `;
   let cur = rows;
   if (state.filters.onlyOrphans) {
     cur = cur.filter(r => r.orphan === true);
@@ -223,7 +280,8 @@ export function renderDirTable(tbodyEl, rows, sortKey, segment){
   for(const r of cur){
     const tr=document.createElement('tr'); tr.setAttribute('data-path', r.directory);
     tr.innerHTML = `<td>${highlightMatches(r.directory, state.search)}</td><td>${r['file-count']??'–'}</td><td>${humanBytes(r['size-bytes'])}</td><td><button class="copy-btn" title="Copy path to clipboard"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></td>`;
-    if (r.orphan) tr.classList.add('orphan');
+    // Add orphan class when unchecked and row is orphan
+    if (r.orphan && !state.filters.onlyOrphans) tr.classList.add('orphan');
     tr.querySelector('.copy-btn').onclick = (e)=>{ e.stopPropagation(); copyText(r.directory); };
     tbodyEl.appendChild(tr);
   }

@@ -79,13 +79,22 @@ export function renderTree(container, tree){
     return false;
   }
 
+  function hasOrphanDescendant(node) {
+    if (node.payload?.orphan) return true;
+    for (const child of node.children.values()) {
+      if (hasOrphanDescendant(child)) return true;
+    }
+    return false;
+  }
+
   function nodeRow(node, depth){
     const r = node.payload;
     const orphan = !!r?.orphan;
     const path = r ? (r.directory || r.node) : node.name;
     const matchesSearch = !state.search || path.toLowerCase().includes(state.search.toLowerCase());
     const hasMatchingChild = hasMatchingDescendant(node);
-    if ((only && !orphan && node.kind!=='dir') || (!matchesSearch && !hasMatchingChild)) return null;
+    if (only && !orphan && (node.kind !== 'dir' || !hasOrphanDescendant(node))) return null;
+    if (!matchesSearch && !hasMatchingChild) return null;
     const row = document.createElement('div');
     row.className = 'row';
     row.style.paddingLeft = `${depth*12}px`;
@@ -103,7 +112,8 @@ export function renderTree(container, tree){
     }
     const label = document.createElement('span');
     label.innerHTML = highlightMatches(node.name, state.search);
-    if (orphan) label.classList.add('orphan');
+    // Add orphan class when unchecked and node is orphan
+    if (orphan && !state.filters.onlyOrphans) label.classList.add('orphan');
     const copy = document.createElement('button');
     copy.className = 'copy-btn';
     copy.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';

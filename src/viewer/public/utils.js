@@ -27,7 +27,7 @@ export async function copyText(s){
   }
 }
 
-function showToast(message, isError=false) {
+export function showToast(message, isError=false) {
   const toast = document.createElement('div');
   toast.className = `toast${isError ? ' error' : ''}`;
   toast.textContent = message;

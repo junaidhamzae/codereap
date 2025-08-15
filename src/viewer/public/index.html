@@ -8,8 +8,10 @@
   </head>
   <body>
     <header id="appHeader" style="display:none" role="banner">
-      <div class="left">Report: <span id="reportName" aria-live="polite">None</span></div>
-      <div class="right"><button id="changeReport" style="display:none" aria-label="Change report file">Change report</button></div>
+      <div class="left">
+        Report: <span id="reportName" aria-live="polite">None</span>
+        <button id="changeReport" style="display:none" aria-label="Change report file">Change report</button>
+      </div>
     </header>
     <main id="landing" class="card" role="main">
       <h1>Select a CodeReap JSON report</h1>
@@ -18,28 +20,23 @@
     <section id="app" style="display:none" role="main">
       <div class="view-controls">
         <div class="controls-row">
-          <nav class="tabs" role="tablist">
-            <button id="tabTree" class="active" role="tab" aria-selected="true" aria-controls="treePane">
-              <span>Explore Tree</span>
-              <span class="sr-only">Browse project structure</span>
-            </button>
-            <button id="tabPrune" role="tab" aria-selected="false" aria-controls="prunePane">
-              <span>Prioritize Pruning</span>
-              <span class="sr-only">Review orphan candidates</span>
-            </button>
-          </nav>
-          <div class="orphan-filter">
-            <label class="tooltip-wrapper">
+          <div class="tabs-group">
+            <nav class="tabs" role="tablist">
+              <button id="tabTree" class="active" role="tab" aria-selected="true" aria-controls="treePane">
+                <span>Explore Tree</span>
+                <span class="sr-only">Browse project structure</span>
+              </button>
+              <button id="tabPrune" role="tab" aria-selected="false" aria-controls="prunePane">
+                <span>Prioritize Pruning</span>
+                <span class="sr-only">Review orphan candidates</span>
+              </button>
+            </nav>
+            <div class="tooltip-wrapper checkbox-wrapper">
               <input id="onlyOrphans" type="checkbox" aria-label="Show only orphaned files and directories" />
-              <span>Only orphans</span>
-              <div class="tooltip" role="tooltip">Show only orphaned files/directories (no incoming dependencies). When unchecked, orphans are highlighted in red.</div>
-            </label>
-          </div>
-        </div>
-        <div class="controls-row">
-          <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Search paths..." aria-label="Search file and directory paths" />
-            <button id="clearSearch" class="clear-search" aria-label="Clear search">×</button>
+              <label for="onlyOrphans">Only orphans</label>
+              <div class="tooltip" role="tooltip">Show only orphaned files/directories (no incoming dependencies). When unchecked,
+                orphans are highlighted in red.</div>
+              </div>
           </div>
         </div>
       </div>
@@ -49,7 +46,14 @@
       <div id="prunePane" style="display:none" role="tabpanel" aria-labelledby="tabPrune">
         <div id="pruneControls" role="toolbar" aria-label="Table controls"></div>
         <table id="pruneTable" role="grid" aria-label="Files and directories to consider for pruning">
-          <thead role="rowgroup"></thead>
+          <thead role="rowgroup">
+            <tr>
+              <th scope="col">Path</th>
+              <th scope="col">Size</th>
+              <th scope="col">In-degree</th>
+              <th scope="col">Exports (Orphan/Total)</th>
+            </tr>
+          </thead>
           <tbody role="rowgroup"></tbody>
         </table>
       </div>

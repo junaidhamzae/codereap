@@ -1,4 +1,5 @@
 import { state, resetState, setReport, setTab, setOnlyOrphans, setExtensions, setSortFiles, setSortDirs, setSearch } from './state.js';
+import { showToast } from './utils.js';
 import { parseReportText, filenameOf } from './parse.js';
 import { buildTree, renderTree } from './tree.js';
 import { renderFileControls, renderFileTable, renderDirControls, renderDirTable } from './table.js';
@@ -14,8 +15,7 @@ const treeContainer = el('#treeContainer');
 const pruneControls = el('#pruneControls');
 const pruneTbody = document.querySelector('#pruneTable tbody');
 const onlyOrphans = el('#onlyOrphans');
-const searchInput = el('#searchInput');
-const clearSearch = el('#clearSearch');
+
 
 function showLanding(){ document.body.setAttribute('data-view','landing'); appHeader.style.display='none'; document.getElementById('app').style.display='none'; document.getElementById('landing').style.display='grid'; }
 function showApp(){ document.body.setAttribute('data-view','app'); appHeader.style.display='flex'; document.getElementById('app').style.display='block'; document.getElementById('landing').style.display='none'; }
@@ -62,6 +62,9 @@ async function onPickFile(file){
         reportName.textContent = filenameOf(file);
         changeBtn.style.display = '';
         setTab('tree');
+        onlyOrphans.disabled = false;
+        onlyOrphans.checked = false;
+        setOnlyOrphans(false);
         rerender();
         showApp();
         resolve();
@@ -152,7 +155,6 @@ changeBtn.addEventListener('click', () => {
   // Reset UI elements
   reportName.textContent = '';
   changeBtn.style.display = 'none';
-  searchInput.value = '';
   onlyOrphans.checked = false;
   // Return to landing
   showLanding();
@@ -164,6 +166,16 @@ function switchTab(tab) {
   tabPrune.setAttribute('aria-selected', (!isTree).toString());
   document.getElementById('treePane').style.display = isTree ? '' : 'none';
   document.getElementById('prunePane').style.display = isTree ? 'none' : '';
+  
+  // Handle Only Orphans checkbox state
+  if (isTree) {
+    onlyOrphans.disabled = false;
+  } else {
+    onlyOrphans.checked = true;
+    onlyOrphans.disabled = true;
+    setOnlyOrphans(true);
+  }
+  
   rerender();
 }
 
@@ -179,22 +191,26 @@ tabPrune.addEventListener('click', () => switchTab('prune'));
     }
   });
 });
-onlyOrphans?.addEventListener('change',(e)=>{ setOnlyOrphans(/** @type {HTMLInputElement} */(e.target).checked); rerender(); });
-
-// search functionality
-let searchTimeout;
-searchInput.addEventListener('input', (e) => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    setSearch(/** @type {HTMLInputElement} */(e.target).value);
+// Make the entire Only Orphans wrapper clickable
+const onlyOrphansWrapper = onlyOrphans?.closest('.checkbox-wrapper');
+if (onlyOrphansWrapper) {
+  // Handle direct checkbox changes
+  onlyOrphans.addEventListener('change', (e) => {
+    setOnlyOrphans(/** @type {HTMLInputElement} */(e.target).checked);
     rerender();
-  }, 200); // debounce search
-});
-clearSearch.addEventListener('click', () => {
-  searchInput.value = '';
-  setSearch('');
-  rerender();
-});
+  });
+
+  // Handle wrapper clicks
+  onlyOrphansWrapper.addEventListener('click', (e) => {
+    // Don't handle click if it's directly on the checkbox or label (let the native behavior work)
+    if (e.target === onlyOrphans || e.target.tagName === 'LABEL') return;
+    
+    // Toggle checkbox and trigger change event
+    onlyOrphans.click();
+  });
+}
+
+
 
 // initial view
 showLanding();

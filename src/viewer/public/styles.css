@@ -43,7 +43,39 @@ ul {
 h1{ font-size:1.25rem; margin:0; }
 .orphan{ color: var(--orphan-red); }
 
-header#appHeader{ position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--header-bg); color:white; }
+header#appHeader {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--header-bg);
+  color: white;
+}
+
+header#appHeader .left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+header#appHeader button {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+header#appHeader button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
 .view-controls {
   display: flex;
   flex-direction: column;
@@ -104,6 +136,11 @@ header#appHeader{ position:sticky; top:0; z-index:10; display:flex; align-items:
   background: #f3f4f6;
 }
 
+.tabs-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 nav.tabs {
   display: flex;
   gap: 8px;
@@ -150,18 +187,46 @@ nav.tabs button.active {
   border-color: #111827;
 }
 
-.orphan-filter {
-  display: flex;
+/* Reusable checkbox component */
+.checkbox-wrapper {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   background: white;
+  cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+  
+  .checkbox-wrapper:hover {
+    background: #f8fafc;
+    border-color: #d1d5db;
+  }
+  
+  .checkbox-wrapper:active {
+    background: #f1f5f9;
+    transform: scale(0.98);
+  }
+  
+  .checkbox-wrapper input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 
-.orphan-filter input[type="checkbox"] {
-  margin-right: 6px;
+.checkbox-wrapper label {
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+/* Orphan filter using the reusable style */
+.orphan-filter {
+  display: flex;
+  align-items: center;
 }
 
 .tooltip-wrapper {
@@ -289,6 +354,31 @@ thead th, tbody td {
   text-align: left;
 }
 
+/* Path column wrapping */
+tbody td:first-child {
+  max-width: 50vw;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Fixed widths for other columns */
+thead th:nth-child(2),
+tbody td:nth-child(2) {
+  width: 100px;
+  white-space: nowrap;
+}
+
+thead th:nth-child(3),
+tbody td:nth-child(3) {
+  width: 100px;
+  white-space: nowrap;
+}
+
+thead th:nth-child(4),
+tbody td:nth-child(4) {
+  width: 150px;
+  white-space: nowrap;
+}
 tr.orphan td:first-child {
   color: var(--orphan-red);
 }
@@ -391,10 +481,37 @@ tr[aria-expanded="true"] {
     max-width: none;
   }
 
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
+                                .controls {
+                                  flex-direction: column;
+                                  align-items: stretch;
+                                  gap: 16px;
+                                }
+                
+                                .strategy {
+                                  min-width: auto;
+                                }
+                
+                                .exts {
+                                  flex-direction: column;
+                                  align-items: flex-start;
+                                }
+                
+                                .ext-boxes {
+                                  padding-left: 8px;
+                                }
+                
+                                tbody td:first-child {
+                                  max-width: 200px;
+                                }
+                
+                                thead th:nth-child(2),
+                                tbody td:nth-child(2),
+                                thead th:nth-child(3),
+                                tbody td:nth-child(3),
+                                thead th:nth-child(4),
+                                tbody td:nth-child(4) {
+                                  width: auto;
+                                  min-width: 80px;
   }
 }
 
@@ -503,3 +620,74 @@ input:focus-visible {
 h1{ font-size:1.25rem; margin:0; }
 .orphan{ color: var(--orphan-red); }
 
+/* Dark mode checkbox styles */
+@media (prefers-color-scheme: dark) {
+  .checkbox-wrapper {
+    border-color: #334155;
+    background: #1e293b;
+    color: var(--fg);
+  }
+
+  .checkbox-wrapper:hover {
+    background: #0f172a;
+    border-color: #475569;
+  }
+
+  .checkbox-wrapper:active {
+    background: #0f172a;
+    border-color: #475569;
+  }
+}
+
+/* Controls layout */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 0;
+}
+
+.strategy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 300px;
+}
+
+.strategy select {
+  flex: 1;
+}
+
+.exts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.ext-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.copy-paths-btn {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .copy-paths-btn {
+    border-color: #334155;
+    background: #1e293b;
+    color: var(--fg);
+  }
+
+  .copy-paths-btn:hover {
+    background: #334155;
+  }
+}
