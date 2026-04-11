@@ -49,6 +49,8 @@ export interface ParsedFile {
   globImports: string[];
   /** Identifiers used in glob calls that couldn't be resolved locally (for cross-file resolution) */
   unresolvedGlobRefs?: { identifier: string; importSource: string }[];
+  /** File paths constructed via path.join/path.resolve with string literal args */
+  pathRefs?: string[];
   // Optional details when symbol collection is enabled
   importSpecs?: ImportSpecifierInfo[];
   exportsInfo?: ExportInfo;
@@ -77,7 +79,17 @@ export async function parseFile(
   // Skip AST parsing for non-JS/TS files that we still want to include as nodes
   const ext = path.extname(filePath).toLowerCase();
   const isScript = ['.js', '.jsx', '.ts', '.tsx'].includes(ext);
+  const isStylesheet = ['.scss', '.css'].includes(ext);
+
   if (!isScript) {
+    // Parse SCSS/CSS files for @import, @use, @forward directives
+    if (isStylesheet) {
+      const styleImportRegex = /(?:@import|@use|@forward)\s+['"]([^'"]+)['"]/g;
+      let match;
+      while ((match = styleImportRegex.exec(content)) !== null) {
+        imports.push(match[1]);
+      }
+    }
     if (collectSymbols) {
       return { imports, exports, dynamicImports, globImports, importSpecs: [], exportsInfo };
     }
@@ -109,6 +121,9 @@ export async function parseFile(
   const importedIdentifiers = new Map<string, string>();
   // Track unresolved glob references for cross-file resolution
   const unresolvedGlobRefs: { identifier: string; importSource: string }[] = [];
+  // Track path.join / path.resolve references with all-string-literal arguments
+  const pathRefs: string[] = [];
+  const fileDir = path.dirname(filePath);
 
   traverse(ast, {
     Program(path: NodePath<Program>) {
@@ -216,16 +231,16 @@ export async function parseFile(
         }
       }
     },
-    CallExpression(path: { node: CallExpression }) {
+    CallExpression(astPath: { node: CallExpression }) {
       if (
-        path.node.callee.type === 'Identifier' &&
-        path.node.callee.name === 'require'
+        astPath.node.callee.type === 'Identifier' &&
+        astPath.node.callee.name === 'require'
       ) {
         if (
-          path.node.arguments.length > 0 &&
-          path.node.arguments[0].type === 'StringLiteral'
+          astPath.node.arguments.length > 0 &&
+          astPath.node.arguments[0].type === 'StringLiteral'
         ) {
-          const src = path.node.arguments[0].value;
+          const src = astPath.node.arguments[0].value;
           imports.push(src);
           if (collectSymbols) {
             // Bare require without binding → treat as default import usage
@@ -238,16 +253,16 @@ export async function parseFile(
         }
       } else if (
         // Detect glob.sync(arg), glob.globSync(arg)
-        path.node.callee.type === 'MemberExpression' &&
-        path.node.callee.object.type === 'Identifier' &&
-        path.node.callee.property.type === 'Identifier' &&
+        astPath.node.callee.type === 'MemberExpression' &&
+        astPath.node.callee.object.type === 'Identifier' &&
+        astPath.node.callee.property.type === 'Identifier' &&
         (
-          (path.node.callee.object.name === 'glob' && (path.node.callee.property.name === 'sync' || path.node.callee.property.name === 'globSync')) ||
-          (path.node.callee.object.name === 'fg' && path.node.callee.property.name === 'sync')
+          (astPath.node.callee.object.name === 'glob' && (astPath.node.callee.property.name === 'sync' || astPath.node.callee.property.name === 'globSync')) ||
+          (astPath.node.callee.object.name === 'fg' && astPath.node.callee.property.name === 'sync')
         ) &&
-        path.node.arguments.length > 0
+        astPath.node.arguments.length > 0
       ) {
-        const arg = path.node.arguments[0];
+        const arg = astPath.node.arguments[0];
         const value = arg.type === 'StringLiteral'
           ? arg.value
           : (arg.type === 'Identifier' ? constStrings.get(arg.name) : undefined);
@@ -258,11 +273,11 @@ export async function parseFile(
         }
       } else if (
         // Detect globSync(arg) — destructured import
-        path.node.callee.type === 'Identifier' &&
-        path.node.callee.name === 'globSync' &&
-        path.node.arguments.length > 0
+        astPath.node.callee.type === 'Identifier' &&
+        astPath.node.callee.name === 'globSync' &&
+        astPath.node.arguments.length > 0
       ) {
-        const arg = path.node.arguments[0];
+        const arg = astPath.node.arguments[0];
         const value = arg.type === 'StringLiteral'
           ? arg.value
           : (arg.type === 'Identifier' ? constStrings.get(arg.name) : undefined);
@@ -271,12 +286,12 @@ export async function parseFile(
         } else if (arg.type === 'Identifier' && importedIdentifiers.has(arg.name)) {
           unresolvedGlobRefs.push({ identifier: arg.name, importSource: importedIdentifiers.get(arg.name)! });
         }
-      } else if (path.node.callee.type === 'Import') {
+      } else if (astPath.node.callee.type === 'Import') {
         if (
-          path.node.arguments.length > 0 &&
-          path.node.arguments[0].type === 'StringLiteral'
+          astPath.node.arguments.length > 0 &&
+          astPath.node.arguments[0].type === 'StringLiteral'
         ) {
-          const src = path.node.arguments[0].value;
+          const src = astPath.node.arguments[0].value;
           dynamicImports.push(src);
           if (collectSymbols) {
             importSpecs.push({
@@ -285,6 +300,36 @@ export async function parseFile(
               imported: { default: false, named: [], namespace: false },
             });
           }
+        }
+      } else if (
+        // Detect path.join(...) and path.resolve(...) with all string-literal / __dirname args
+        astPath.node.callee.type === 'MemberExpression' &&
+        astPath.node.callee.object.type === 'Identifier' &&
+        astPath.node.callee.object.name === 'path' &&
+        astPath.node.callee.property.type === 'Identifier' &&
+        (astPath.node.callee.property.name === 'join' || astPath.node.callee.property.name === 'resolve') &&
+        astPath.node.arguments.length > 0
+      ) {
+        const args = astPath.node.arguments;
+        const segments: string[] = [];
+        let allResolvable = true;
+        for (const arg of args) {
+          if (arg.type === 'StringLiteral') {
+            segments.push(arg.value);
+          } else if (arg.type === 'Identifier' && arg.name === '__dirname') {
+            segments.push(fileDir);
+          } else if (arg.type === 'Identifier' && constStrings.has(arg.name)) {
+            segments.push(constStrings.get(arg.name)!);
+          } else {
+            allResolvable = false;
+            break;
+          }
+        }
+        if (allResolvable && segments.length > 0) {
+          const joined = (astPath.node.callee.property as Identifier).name === 'resolve'
+            ? path.resolve(...segments)
+            : path.join(...segments);
+          pathRefs.push(joined);
         }
       }
     },
@@ -436,9 +481,9 @@ export async function parseFile(
       named: namedUsage,
     };
 
-    return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, importSpecs, exportsInfo, exportUsage };
+    return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, pathRefs: pathRefs.length > 0 ? pathRefs : undefined, importSpecs, exportsInfo, exportUsage };
   }
   // Always include exportsInfo with namedConstValues for cross-file constant propagation
   const hasConstValues = exportsInfo.namedConstValues && Object.keys(exportsInfo.namedConstValues).length > 0;
-  return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, ...(hasConstValues ? { exportsInfo } : {}) };
+  return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, pathRefs: pathRefs.length > 0 ? pathRefs : undefined, ...(hasConstValues ? { exportsInfo } : {}) };
 }

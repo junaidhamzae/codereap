@@ -201,3 +201,134 @@ describe('cross-file constant propagation', () => {
     expect(parsed.exportsInfo?.namedConstValues).toBeUndefined();
   }));
 });
+
+describe('SCSS @import/@use/@forward parsing', () => {
+  it('extracts @import from .scss file', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'styles.scss');
+    fs.writeFileSync(file, "@import 'foo';");
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toContain('foo');
+  }));
+
+  it('extracts @use from .scss file', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'styles.scss');
+    fs.writeFileSync(file, "@use 'bar';");
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toContain('bar');
+  }));
+
+  it('extracts @forward from .scss file', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'styles.scss');
+    fs.writeFileSync(file, "@forward 'baz';");
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toContain('baz');
+  }));
+
+  it('extracts multiple directives from one .scss file', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'theme.scss');
+    fs.writeFileSync(file, [
+      "@import 'variables';",
+      "@use 'mixins';",
+      "@forward 'colors';",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toEqual(expect.arrayContaining(['variables', 'mixins', 'colors']));
+    expect(parsed.imports).toHaveLength(3);
+  }));
+
+  it('returns empty imports for CSS without @import', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'plain.css');
+    fs.writeFileSync(file, 'body { color: red; }');
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toEqual([]);
+  }));
+
+  it('extracts @import from .css file', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'styles.css');
+    fs.writeFileSync(file, "@import 'reset';");
+    const parsed = await parseFile(file);
+    expect(parsed.imports).toContain('reset');
+  }));
+
+  it('returns collectSymbols fields for stylesheet files', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'styles.scss');
+    fs.writeFileSync(file, "@use 'theme';");
+    const parsed = await parseFile(file, { collectSymbols: true });
+    expect(parsed.imports).toContain('theme');
+    expect(parsed.importSpecs).toEqual([]);
+    expect(parsed.exportsInfo).toBeDefined();
+  }));
+});
+
+describe('path.join/path.resolve detection', () => {
+  it('detects path.join(__dirname, ...) and returns resolved pathRefs', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'server.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.join(__dirname, 'public', 'sw.js');",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    const expected = path.join(root, 'public', 'sw.js');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
+
+  it('detects path.resolve(__dirname, ...) and returns resolved pathRefs', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'server.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.resolve(__dirname, 'server/logger.js');",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    const expected = path.resolve(root, 'server/logger.js');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
+
+  it('does NOT include path.join with non-resolvable arguments in pathRefs', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'server.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.join(someVariable, 'foo');",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    expect(parsed.pathRefs).toBeUndefined();
+  }));
+
+  it('resolves path.join with const propagation', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'server.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const dir = 'public';",
+      "const p = path.join(__dirname, dir, 'sw.js');",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    const expected = path.join(root, 'public', 'sw.js');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
+
+  it('returns pathRefs in collectSymbols mode too', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'server.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.join(__dirname, 'assets', 'main.js');",
+    ].join('\n'));
+    const parsed = await parseFile(file, { collectSymbols: true });
+    const expected = path.join(root, 'assets', 'main.js');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
+
+  it('detects path.join with only string literals (no __dirname)', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'build.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.join('dist', 'bundle.js');",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    const expected = path.join('dist', 'bundle.js');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
+});

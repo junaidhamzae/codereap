@@ -57,7 +57,7 @@ exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dyn
     "exists": true,
     "in-degree": 0,
     "node": "package.json",
-    "orphan": true,
+    "orphan": false,
     "size-bytes": 110,
     "symbols": {
       "exports": {
@@ -69,7 +69,6 @@ exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dyn
         "named": [],
         "reExports": [],
       },
-      "imports": [],
     },
   },
 ]

@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 
-const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+const DEFAULT_EXTENSIONS = ['.ts', '.d.ts', '.tsx', '.js', '.jsx', '.json'];
 
 export interface ResolveOptions {
   root: string; // absolute project root
@@ -28,6 +28,24 @@ function tryResolveAsFileOrDir(candidatePath: string, extensions: string[]): str
     const withExt = candidatePath + ext;
     if (fs.existsSync(withExt)) {
       return withExt;
+    }
+  }
+  // SCSS partial convention: try _filename.scss (e.g. @import 'mixins' → _mixins.scss)
+  const dir = path.dirname(candidatePath);
+  const base = path.basename(candidatePath);
+  if (!base.startsWith('_')) {
+    for (const ext of extensions) {
+      if (ext === '.scss' || ext === '.css') {
+        const partial = path.join(dir, '_' + base + ext);
+        if (fs.existsSync(partial)) {
+          return partial;
+        }
+      }
+    }
+    // Also try _filename without adding extension (the specifier may already have one)
+    const partialExact = path.join(dir, '_' + base);
+    if (fs.existsSync(partialExact)) {
+      return partialExact;
     }
   }
   return null;

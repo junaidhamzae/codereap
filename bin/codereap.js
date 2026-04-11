@@ -251,7 +251,34 @@ async function main() {
         if (fs.existsSync(sourceFile)) finalPath = sourceFile;
       }
       if (fs.existsSync(finalPath)) {
-        entrypoints.push(finalPath);
+        // If it's a directory, try to resolve to index file
+        if (fs.statSync(finalPath).isDirectory()) {
+          const scriptExts = ['.js', '.ts', '.jsx', '.tsx', '.mjs'];
+          let found = false;
+          for (const ext of scriptExts) {
+            const indexFile = path.join(finalPath, 'index' + ext);
+            if (fs.existsSync(indexFile)) {
+              entrypoints.push(indexFile);
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            entrypoints.push(finalPath);
+          }
+        } else {
+          entrypoints.push(finalPath);
+        }
+      } else {
+        // Try appending extensions if file doesn't exist as-is
+        const scriptExts = ['.js', '.ts', '.jsx', '.tsx', '.mjs'];
+        for (const ext of scriptExts) {
+          const withExt = finalPath + ext;
+          if (fs.existsSync(withExt)) {
+            entrypoints.push(withExt);
+            break;
+          }
+        }
       }
     }
   }
@@ -328,6 +355,13 @@ async function main() {
       // Middleware
       `middleware.{js,ts}`,
       `src/middleware.{js,ts}`,
+      // Next.js config (auto-loaded by framework)
+      `next.config.{js,mjs,ts}`,
+      // Instrumentation hooks (Next.js 13+)
+      `instrumentation.{js,ts,mjs}`,
+      `instrumentation-client.{js,ts,mjs}`,
+      `src/instrumentation.{js,ts,mjs}`,
+      `src/instrumentation-client.{js,ts,mjs}`,
     ];
     const resolved = resolveGlobs(nextGlobs);
     if (resolved.length > 0) {
@@ -335,6 +369,80 @@ async function main() {
         `Next.js detected; seeding ${resolved.length} entrypoints via conventions.`
       );
       entrypoints.push(...resolved);
+    }
+  }
+
+  // Storybook detection and seeding
+  if (frameworkMode === 'auto') {
+    const storybookMainCandidates = [
+      '.storybook/main.ts',
+      '.storybook/main.js',
+      '.storybook/main.mjs',
+      '.storybook/main.tsx',
+      '.storybook/main.jsx',
+    ];
+    let storybookMainPath = null;
+    for (const candidate of storybookMainCandidates) {
+      const absCandidate = path.join(root, candidate);
+      if (fs.existsSync(absCandidate)) {
+        storybookMainPath = absCandidate;
+        break;
+      }
+    }
+    if (storybookMainPath) {
+      // Seed .storybook/main and .storybook/preview as entrypoints
+      const storybookEntryGlobs = [
+        `.storybook/main${extsPattern}`,
+        `.storybook/preview${extsPattern}`,
+      ];
+      const storybookEntries = resolveGlobs(storybookEntryGlobs);
+      if (storybookEntries.length > 0) {
+        entrypoints.push(...storybookEntries);
+      }
+
+      // Parse the stories globs from .storybook/main.*
+      try {
+        const mainContent = fs.readFileSync(storybookMainPath, 'utf-8');
+        // Match stories array entries: patterns like '../components/**/*.stories.@(js|jsx|ts|tsx|mdx)'
+        const storiesGlobs = [];
+        const storiesRegex = /stories\s*:\s*\[([^\]]*)\]/s;
+        const storiesMatch = mainContent.match(storiesRegex);
+        if (storiesMatch) {
+          const arrayContent = storiesMatch[1];
+          // Extract string literals from the array
+          const stringRegex = /['"]([^'"]+)['"]/g;
+          let strMatch;
+          while ((strMatch = stringRegex.exec(arrayContent)) !== null) {
+            storiesGlobs.push(strMatch[1]);
+          }
+        }
+        if (storiesGlobs.length > 0) {
+          // Resolve relative to .storybook/ directory
+          const storybookDir = path.dirname(storybookMainPath);
+          const resolvedStories = [];
+          for (const pattern of storiesGlobs) {
+            try {
+              const matches = fg.sync(pattern, {
+                cwd: storybookDir,
+                absolute: true,
+                ignore: ignorePatterns,
+                dot: false,
+              });
+              resolvedStories.push(...matches);
+            } catch (_e) {
+              // skip unresolvable patterns
+            }
+          }
+          if (resolvedStories.length > 0) {
+            console.log(
+              `Storybook detected; seeding ${resolvedStories.length} story entrypoints.`
+            );
+            entrypoints.push(...resolvedStories);
+          }
+        }
+      } catch (_e) {
+        // skip if we can't read storybook config
+      }
     }
   }
 
@@ -349,6 +457,43 @@ async function main() {
       console.log(`User entry globs resolved to ${resolved.length} files.`);
       entrypoints.push(...resolved);
     }
+  }
+
+  // Auto-exclude well-known tooling/convention files from being flagged as orphans.
+  // These files are consumed by tools via filename convention, never via import.
+  const conventionFileGlobs = [
+    'package.json',
+    'package-lock.json',
+    'yarn.lock',
+    'pnpm-lock.yaml',
+    'tsconfig.json',
+    'tsconfig.*.json',
+    'jsconfig.json',
+    'next-env.d.ts',
+    '.eslintrc',
+    '.eslintrc.*',
+    'eslint.config.*',
+    '.prettierrc',
+    '.prettierrc.*',
+    'prettier.config.*',
+    '.babelrc',
+    '.babelrc.*',
+    'babel.config.*',
+    'jest.config.*',
+    'vitest.config.*',
+    'playwright.config.*',
+    'cypress.config.*',
+    '.env',
+    '.env.*',
+    'Dockerfile',
+    'docker-compose.*',
+    'Dockerrun.aws.json',
+  ];
+
+  // Resolve convention files to absolute paths for always-live treatment
+  const conventionAlwaysLive = resolveGlobs(conventionFileGlobs);
+  if (conventionAlwaysLive.length > 0) {
+    console.log(`Auto-marking ${conventionAlwaysLive.length} convention/tooling files as always-live.`);
   }
 
   // De-duplicate entrypoints
@@ -396,7 +541,7 @@ async function main() {
 
   await Promise.all(
     allFilesToParse.map(async (file) => {
-      const { imports, importSpecs, exportsInfo, exportUsage, globImports, unresolvedGlobRefs } =
+      const { imports, importSpecs, exportsInfo, exportUsage, globImports, unresolvedGlobRefs, pathRefs } =
         await parseFile(file, {
           collectSymbols,
         });
@@ -429,6 +574,41 @@ async function main() {
             }
           } catch (_e) {
             // silently skip unresolvable glob patterns
+          }
+        }
+      }
+
+      // Resolve path.join/path.resolve references as edges
+      if (Array.isArray(pathRefs) && pathRefs.length > 0) {
+        for (const refPath of pathRefs) {
+          // Try the path as-is first, then with extensions
+          let resolved = null;
+          if (fs.existsSync(refPath) && fs.statSync(refPath).isFile()) {
+            resolved = refPath;
+          } else {
+            // Try appending extensions
+            for (const ext of extensions) {
+              const dotExt = ext.startsWith('.') ? ext : `.${ext}`;
+              const withExt = refPath + dotExt;
+              if (fs.existsSync(withExt)) {
+                resolved = withExt;
+                break;
+              }
+            }
+            // Try as directory with index file
+            if (!resolved && fs.existsSync(refPath) && fs.statSync(refPath).isDirectory()) {
+              for (const ext of extensions) {
+                const dotExt = ext.startsWith('.') ? ext : `.${ext}`;
+                const indexFile = path.join(refPath, 'index' + dotExt);
+                if (fs.existsSync(indexFile)) {
+                  resolved = indexFile;
+                  break;
+                }
+              }
+            }
+          }
+          if (resolved && graph.nodes.has(resolved)) {
+            graph.addEdge(file, resolved);
           }
         }
       }
@@ -646,6 +826,10 @@ async function main() {
         if (graph.nodes.has(p)) liveFiles.add(p);
       }
     }
+    // Convention files are always live
+    for (const p of conventionAlwaysLive) {
+      if (graph.nodes.has(p)) liveFiles.add(p);
+    }
     const writtenPath = options.dirOnly
       ? await reportDirectories(
           graph,
@@ -701,6 +885,10 @@ async function main() {
       for (const p of resolvedAlways) {
         if (graph.nodes.has(p)) liveFiles.add(p);
       }
+    }
+    // Convention files are always live
+    for (const p of conventionAlwaysLive) {
+      if (graph.nodes.has(p)) liveFiles.add(p);
     }
     const orphans = [...graph.nodes].filter((n) => !liveFiles.has(n));
     // Apply exclude patterns at the end for printing consistency

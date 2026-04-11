@@ -31,7 +31,7 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     "exists": true,
     "in-degree": 0,
     "node": "package.json",
-    "orphan": true,
+    "orphan": false,
     "size-bytes": 147,
     "symbols": {
       "exports": {
@@ -43,7 +43,6 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
         "named": [],
         "reExports": [],
       },
-      "imports": [],
     },
   },
   {

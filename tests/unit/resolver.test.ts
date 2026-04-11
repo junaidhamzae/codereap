@@ -74,6 +74,79 @@ describe('resolver.resolveImport', () => {
     const p2 = resolveImport(from, '@ui/Button/index', opts);
     expect(p2).toBe(comp);
   }));
+
+  it('resolves .d.ts extension', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'a.ts');
+    const target = path.join(root, 'src', 'types.d.ts');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(target, '');
+
+    const resolved = resolveImport(from, './types', { root });
+    expect(resolved).toBe(target);
+  }));
+
+  it('prefers .ts over .d.ts when both exist', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'a.ts');
+    const tsFile = path.join(root, 'src', 'foo.ts');
+    const dtsFile = path.join(root, 'src', 'foo.d.ts');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(tsFile, '');
+    fs.writeFileSync(dtsFile, '');
+
+    const resolved = resolveImport(from, './foo', { root });
+    expect(resolved).toBe(tsFile);
+  }));
+
+  it('resolves SCSS partials (_filename.scss)', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'main.scss');
+    const partial = path.join(root, 'src', '_mixins.scss');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(partial, '');
+
+    const resolved = resolveImport(from, './mixins', { root, extensions: ['.scss', '.css'] });
+    expect(resolved).toBe(partial);
+  }));
+
+  it('prefers non-partial over partial SCSS files', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'main.scss');
+    const regular = path.join(root, 'src', 'mixins.scss');
+    const partial = path.join(root, 'src', '_mixins.scss');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(regular, '');
+    fs.writeFileSync(partial, '');
+
+    const resolved = resolveImport(from, './mixins', { root, extensions: ['.scss', '.css'] });
+    expect(resolved).toBe(regular);
+  }));
+
+  it('resolves SCSS partial with exact _filename match (no extension added)', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'main.scss');
+    const partial = path.join(root, 'src', '_helpers.scss');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(partial, '');
+
+    // Import specifier already includes extension
+    const resolved = resolveImport(from, './helpers.scss', { root, extensions: ['.scss'] });
+    // The exact file doesn't exist, so it should try _helpers.scss
+    expect(resolved).toBe(partial);
+  }));
+
+  it('resolves directory with index.tsx fallback', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'a.ts');
+    const dir = path.join(root, 'src', 'components');
+    const indexFile = path.join(dir, 'index.tsx');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(indexFile, '');
+
+    const resolved = resolveImport(from, './components', { root });
+    expect(resolved).toBe(indexFile);
+  }));
 });
 
 

@@ -6,7 +6,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "exists": true,
     "in-degree": 0,
     "node": "package.json",
-    "orphan": true,
+    "orphan": false,
     "size-bytes": 118,
     "symbols": {
       "exports": {
@@ -18,7 +18,6 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
         "named": [],
         "reExports": [],
       },
-      "imports": [],
     },
   },
   {
@@ -93,7 +92,7 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     "exists": true,
     "in-degree": 0,
     "node": "tsconfig.json",
-    "orphan": true,
+    "orphan": false,
     "size-bytes": 143,
     "symbols": {
       "exports": {
@@ -105,7 +104,6 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
         "named": [],
         "reExports": [],
       },
-      "imports": [],
     },
   },
 ]

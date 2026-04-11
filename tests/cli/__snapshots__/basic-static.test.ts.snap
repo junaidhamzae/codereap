@@ -100,7 +100,7 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     "exists": true,
     "in-degree": 0,
     "node": "package.json",
-    "orphan": true,
+    "orphan": false,
     "size-bytes": 106,
     "symbols": {
       "exports": {
@@ -112,7 +112,6 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
         "named": [],
         "reExports": [],
       },
-      "imports": [],
     },
   },
 ]
