@@ -29,7 +29,10 @@ describe('viewer table sorters', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('../../dist/viewer-cjs/table.js');
     const { renderDirTable } = mod as any;
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
     const tbody = document.createElement('tbody');
+    table.append(thead, tbody);
     const rows = [
       { directory:'src/a', orphan:true, 'size-bytes': 300, 'file-count': 3 },
       { directory:'src/b', orphan:true, 'size-bytes': 100, 'file-count': 10 },

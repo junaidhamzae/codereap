@@ -37,12 +37,18 @@ export interface ExportInfo {
   hasDefault: boolean;
   named: string[];
   reExports: ReExportInfo[];
+  /** Map of exported const name → string literal value (for cross-file constant propagation) */
+  namedConstValues?: Record<string, string>;
 }
 
 export interface ParsedFile {
   imports: string[];
   exports: string[];
   dynamicImports: string[];
+  /** Glob patterns found in glob.sync() / glob.globSync() calls */
+  globImports: string[];
+  /** Identifiers used in glob calls that couldn't be resolved locally (for cross-file resolution) */
+  unresolvedGlobRefs?: { identifier: string; importSource: string }[];
   // Optional details when symbol collection is enabled
   importSpecs?: ImportSpecifierInfo[];
   exportsInfo?: ExportInfo;
@@ -60,6 +66,7 @@ export async function parseFile(
   const imports: string[] = [];
   const exports: string[] = [];
   const dynamicImports: string[] = [];
+  const globImports: string[] = [];
   const collectSymbols = Boolean(opts && opts.collectSymbols);
   const importSpecs: ImportSpecifierInfo[] = [];
   const exportsInfo: ExportInfo = { hasDefault: false, named: [], reExports: [] };
@@ -72,18 +79,36 @@ export async function parseFile(
   const isScript = ['.js', '.jsx', '.ts', '.tsx'].includes(ext);
   if (!isScript) {
     if (collectSymbols) {
-      return { imports, exports, dynamicImports, importSpecs: [], exportsInfo };
+      return { imports, exports, dynamicImports, globImports, importSpecs: [], exportsInfo };
     }
-    return { imports, exports, dynamicImports };
+    return { imports, exports, dynamicImports, globImports };
   }
 
-  const ast = babelParser.parse(content, {
-    sourceType: 'module',
-    plugins: [
-      'typescript',
-      'jsx',
-    ],
-  });
+  let ast;
+  try {
+    ast = babelParser.parse(content, {
+      sourceType: 'module',
+      plugins: [
+        'typescript',
+        'jsx',
+      ],
+    });
+  } catch (err: any) {
+    // Log the error but don't fail the entire process
+    console.warn(`Warning: Failed to parse ${filePath}:`, err.message || err);
+    // Return empty results for this file
+    if (collectSymbols) {
+      return { imports: [], exports: [], dynamicImports: [], globImports: [], importSpecs: [], exportsInfo: { hasDefault: false, named: [], reExports: [] } };
+    }
+    return { imports: [], exports: [], dynamicImports: [], globImports: [] };
+  }
+
+  // Lightweight constant propagation: track `const X = 'literal'` bindings
+  const constStrings = new Map<string, string>();
+  // Track imported identifiers → import source for cross-file constant propagation
+  const importedIdentifiers = new Map<string, string>();
+  // Track unresolved glob references for cross-file resolution
+  const unresolvedGlobRefs: { identifier: string; importSource: string }[] = [];
 
   traverse(ast, {
     Program(path: NodePath<Program>) {
@@ -92,6 +117,14 @@ export async function parseFile(
     ImportDeclaration(path: { node: ImportDeclaration }) {
       const src = path.node.source.value;
       imports.push(src);
+      // Track imported identifiers for cross-file constant propagation
+      for (const spec of path.node.specifiers) {
+        if (spec.type === 'ImportSpecifier' && spec.imported.type === 'Identifier') {
+          importedIdentifiers.set(spec.local.name, src);
+        } else if (spec.type === 'ImportDefaultSpecifier') {
+          importedIdentifiers.set(spec.local.name, src);
+        }
+      }
       if (collectSymbols) {
         let hasDefault = false;
         let namespace = false;
@@ -115,6 +148,38 @@ export async function parseFile(
       }
     },
     VariableDeclarator(path: { node: VariableDeclarator }) {
+      // Track const bindings with string literal values for constant propagation
+      const initVal = path.node.init as any;
+      if (
+        initVal &&
+        initVal.type === 'StringLiteral' &&
+        (path.node.id as any).type === 'Identifier'
+      ) {
+        constStrings.set((path.node.id as Identifier).name, initVal.value);
+      }
+
+      // Track CJS require bindings for cross-file constant propagation
+      const initReq = path.node.init as any;
+      if (
+        initReq &&
+        initReq.type === 'CallExpression' &&
+        initReq.callee?.type === 'Identifier' && initReq.callee.name === 'require' &&
+        initReq.arguments?.length > 0 &&
+        initReq.arguments[0].type === 'StringLiteral'
+      ) {
+        const reqSrc = initReq.arguments[0].value as string;
+        if ((path.node.id as any).type === 'ObjectPattern') {
+          const pattern = path.node.id as ObjectPattern;
+          for (const prop of pattern.properties as any[]) {
+            if (prop?.type === 'ObjectProperty' && prop.key?.type === 'Identifier') {
+              importedIdentifiers.set(prop.key.name, reqSrc);
+            }
+          }
+        } else if ((path.node.id as any).type === 'Identifier') {
+          importedIdentifiers.set((path.node.id as Identifier).name, reqSrc);
+        }
+      }
+
       if (!collectSymbols) return;
       const init = path.node.init as any;
       if (
@@ -170,6 +235,41 @@ export async function parseFile(
               imported: { default: true, named: [], namespace: false },
             });
           }
+        }
+      } else if (
+        // Detect glob.sync(arg), glob.globSync(arg)
+        path.node.callee.type === 'MemberExpression' &&
+        path.node.callee.object.type === 'Identifier' &&
+        path.node.callee.property.type === 'Identifier' &&
+        (
+          (path.node.callee.object.name === 'glob' && (path.node.callee.property.name === 'sync' || path.node.callee.property.name === 'globSync')) ||
+          (path.node.callee.object.name === 'fg' && path.node.callee.property.name === 'sync')
+        ) &&
+        path.node.arguments.length > 0
+      ) {
+        const arg = path.node.arguments[0];
+        const value = arg.type === 'StringLiteral'
+          ? arg.value
+          : (arg.type === 'Identifier' ? constStrings.get(arg.name) : undefined);
+        if (value) {
+          globImports.push(value);
+        } else if (arg.type === 'Identifier' && importedIdentifiers.has(arg.name)) {
+          unresolvedGlobRefs.push({ identifier: arg.name, importSource: importedIdentifiers.get(arg.name)! });
+        }
+      } else if (
+        // Detect globSync(arg) — destructured import
+        path.node.callee.type === 'Identifier' &&
+        path.node.callee.name === 'globSync' &&
+        path.node.arguments.length > 0
+      ) {
+        const arg = path.node.arguments[0];
+        const value = arg.type === 'StringLiteral'
+          ? arg.value
+          : (arg.type === 'Identifier' ? constStrings.get(arg.name) : undefined);
+        if (value) {
+          globImports.push(value);
+        } else if (arg.type === 'Identifier' && importedIdentifiers.has(arg.name)) {
+          unresolvedGlobRefs.push({ identifier: arg.name, importSource: importedIdentifiers.get(arg.name)! });
         }
       } else if (path.node.callee.type === 'Import') {
         if (
@@ -233,6 +333,12 @@ export async function parseFile(
         path.node.specifiers.forEach((specifier) => {
           if (specifier.exported.type === 'Identifier') {
             exports.push(specifier.exported.name);
+            // Track re-exported const string values (e.g. const X = 'val'; export { X })
+            const localName = (specifier as any).local?.type === 'Identifier' ? (specifier as any).local.name : specifier.exported.name;
+            if (!path.node.source && constStrings.has(localName)) {
+              if (!exportsInfo.namedConstValues) exportsInfo.namedConstValues = {};
+              exportsInfo.namedConstValues[specifier.exported.name] = constStrings.get(localName)!;
+            }
             if (collectSymbols) {
               exportsInfo.named.push(specifier.exported.name);
               if ((specifier as any).local && (specifier as any).local.type === 'Identifier') {
@@ -253,6 +359,12 @@ export async function parseFile(
             if ((declaration.id as any).type === 'Identifier') {
               const name = (declaration.id as Identifier).name;
               exports.push(name);
+              // Track exported const string values for cross-file constant propagation
+              const declInit = declaration.init as any;
+              if (declInit && declInit.type === 'StringLiteral') {
+                if (!exportsInfo.namedConstValues) exportsInfo.namedConstValues = {};
+                exportsInfo.namedConstValues[name] = declInit.value;
+              }
               if (collectSymbols) {
                 exportsInfo.named.push(name);
                 exportNamedLocalMap[name] = { localName: name, reexport: false };
@@ -303,6 +415,7 @@ export async function parseFile(
       return false;
     };
 
+    let defaultReferenced = false;
     traverse(ast, {
       Identifier(idPath: NodePath<Identifier>) {
         if (isInsideExportDecl(idPath) || isDeclarationId(idPath)) return;
@@ -312,28 +425,20 @@ export async function parseFile(
             namedUsage[publicName].referencedInFile = true;
           }
         }
-        if (defaultLocalName && name === defaultLocalName && !isInsideExportDecl(idPath) && !isDeclarationId(idPath)) {
-          // handled below via defaultReferenced, but we can mark a flag here
+        if (defaultLocalName && name === defaultLocalName) {
+          defaultReferenced = true;
         }
       },
     });
-
-    let defaultReferenced = false;
-    if (defaultLocalName) {
-      traverse(ast, {
-        Identifier(idPath: NodePath<Identifier>) {
-          if (isInsideExportDecl(idPath) || isDeclarationId(idPath)) return;
-          if (idPath.node.name === defaultLocalName) defaultReferenced = true;
-        },
-      });
-    }
 
     const exportUsage = {
       default: exportsInfo.hasDefault ? { exists: true, localName: defaultLocalName, referencedInFile: defaultReferenced } : undefined,
       named: namedUsage,
     };
 
-    return { imports, exports, dynamicImports, importSpecs, exportsInfo, exportUsage };
+    return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, importSpecs, exportsInfo, exportUsage };
   }
-  return { imports, exports, dynamicImports };
+  // Always include exportsInfo with namedConstValues for cross-file constant propagation
+  const hasConstValues = exportsInfo.namedConstValues && Object.keys(exportsInfo.namedConstValues).length > 0;
+  return { imports, exports, dynamicImports, globImports, unresolvedGlobRefs, ...(hasConstValues ? { exportsInfo } : {}) };
 }

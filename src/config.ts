@@ -8,6 +8,11 @@ export interface CodereapConfig {
   importRoot?: string;
   aliases?: Record<string, string | string[]>;
   out?: string;
+  /** Glob patterns for files that should always be considered live (relative to root) */
+  alwaysLive?: string[];
+  /** Manual edge declarations for imports that can't be statically detected.
+   *  Keys are file paths (relative to root), values are glob patterns that the file depends on. */
+  implicitEdges?: Record<string, string[]>;
 }
 
 export interface LoadedConfig {
@@ -17,6 +22,10 @@ export interface LoadedConfig {
   importRoot?: string; // absolute path
   paths?: Record<string, string[]>; // tsconfig-like
   out: string;
+  /** Glob patterns for files that should always be considered live */
+  alwaysLive?: string[];
+  /** Resolved implicit edges: keys are absolute file paths, values are glob patterns */
+  implicitEdges?: Record<string, string[]>;
 }
 
 export interface TsJsConfig {
@@ -61,6 +70,21 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     }
   }
 
+  // Resolve implicitEdges keys to absolute paths
+  let implicitEdges: Record<string, string[]> | undefined = undefined;
+  if (data.implicitEdges && typeof data.implicitEdges === 'object') {
+    implicitEdges = {};
+    for (const [fileRel, globs] of Object.entries(data.implicitEdges)) {
+      if (Array.isArray(globs)) {
+        implicitEdges[path.resolve(rootAbs, fileRel)] = globs;
+      }
+    }
+  }
+
+  const alwaysLive = Array.isArray(data.alwaysLive) && data.alwaysLive.length > 0
+    ? data.alwaysLive
+    : undefined;
+
   return {
     root: data.root ? path.resolve(rootAbs, data.root) : rootAbs,
     extensions,
@@ -68,6 +92,8 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     importRoot: importRootAbs,
     paths,
     out: data.out || 'codereap-report',
+    alwaysLive,
+    implicitEdges,
   };
 }
 

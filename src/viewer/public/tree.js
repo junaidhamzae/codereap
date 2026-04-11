@@ -147,8 +147,9 @@ export function renderTree(container, tree){
           }
         } else {
           // Remove all child rows
+          const rowDepth = parseInt(row.style.paddingLeft) || 0;
           let next = row.nextSibling;
-          while (next && next.style.paddingLeft > row.style.paddingLeft) {
+          while (next && (parseInt(next.style.paddingLeft) || 0) > rowDepth) {
             const toRemove = next;
             next = next.nextSibling;
             toRemove.remove();

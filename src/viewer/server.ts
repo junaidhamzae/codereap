@@ -71,7 +71,7 @@ export async function startViewerServer(opts: ViewerOptions = {}): Promise<Viewe
         case '/favicon.ico':await serveFile(res, 'favicon.ico');return;
         default: {
           // prevent path traversal
-          if (!/^[a-zA-Z0-9_./-]+$/.test(route)) { res.writeHead(404); res.end(); return; }
+          if (/\.\./.test(route) || !/^\/[a-zA-Z0-9_.\-/]+$/.test(route)) { res.writeHead(404); res.end(); return; }
           // allow module files like /state.js, /tree.js, etc.
           await serveFile(res, route.replace(/^\//,''));
         }

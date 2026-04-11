@@ -354,6 +354,12 @@ async function main() {
   // De-duplicate entrypoints
   entrypoints = Array.from(new Set(entrypoints));
 
+  // Merge alwaysLive from CLI flag and config file
+  const alwaysLiveGlobs = [
+    ...(options.alwaysLive ? String(options.alwaysLive).split(',').map(s => s.trim()).filter(Boolean) : []),
+    ...(fileCfg.alwaysLive || []),
+  ];
+
   console.log(`Scanning for source files...`);
   const files = await scanFiles(mergedRoot, extensions, exclude, rootDir);
   const sourceFiles = new Set(files);
@@ -384,12 +390,58 @@ async function main() {
   const dynamicEdgesOn =
     String(options.dynamicEdges || 'on').toLowerCase() !== 'off';
 
+  // Maps for cross-file constant propagation (glob resolution)
+  const fileExportsInfo = new Map();    // abs path → exportsInfo (with namedConstValues)
+  const fileUnresolvedGlobs = new Map(); // abs path → unresolvedGlobRefs[]
+
   await Promise.all(
     allFilesToParse.map(async (file) => {
-      const { imports, importSpecs, exportsInfo, exportUsage } =
+      const { imports, importSpecs, exportsInfo, exportUsage, globImports, unresolvedGlobRefs } =
         await parseFile(file, {
           collectSymbols,
         });
+
+      // Resolve glob-based imports (e.g. glob.sync('./configs/*.js'))
+      // Try resolving relative to the file's directory first, then fall back to project root
+      if (Array.isArray(globImports) && globImports.length > 0) {
+        const fileDir = path.dirname(file);
+        for (const pattern of globImports) {
+          try {
+            let resolved = fg.sync(pattern, {
+              cwd: fileDir,
+              absolute: true,
+              ignore: ignorePatterns,
+              dot: false,
+            });
+            // If no matches relative to file dir, try relative to project root
+            if (resolved.length === 0 && fileDir !== root) {
+              resolved = fg.sync(pattern, {
+                cwd: root,
+                absolute: true,
+                ignore: ignorePatterns,
+                dot: false,
+              });
+            }
+            for (const target of resolved) {
+              if (graph.nodes.has(target)) {
+                graph.addEdge(file, target);
+              }
+            }
+          } catch (_e) {
+            // silently skip unresolvable glob patterns
+          }
+        }
+      }
+
+      // Store export info (with namedConstValues) for cross-file constant propagation
+      if (exportsInfo && exportsInfo.namedConstValues && Object.keys(exportsInfo.namedConstValues).length > 0) {
+        fileExportsInfo.set(file, exportsInfo);
+      }
+      // Store unresolved glob refs for second-pass resolution
+      if (Array.isArray(unresolvedGlobRefs) && unresolvedGlobRefs.length > 0) {
+        fileUnresolvedGlobs.set(file, unresolvedGlobRefs);
+      }
+
       for (const imp of imports) {
         let resolved = resolveImport(file, imp, {
           root: mergedRoot,
@@ -480,6 +532,81 @@ async function main() {
     })
   );
 
+  // Cross-file constant propagation: resolve glob refs that use imported constants
+  if (fileUnresolvedGlobs.size > 0) {
+    for (const [file, refs] of fileUnresolvedGlobs.entries()) {
+      for (const ref of refs) {
+        // Resolve the import source to an absolute file path
+        let targetFile = resolveImport(file, ref.importSource, {
+          root: mergedRoot,
+          importRoot,
+          paths,
+          extensions: extensions.map((e) => (e.startsWith('.') ? e : `.${e}`)),
+        });
+        if (targetFile && rootDir && outDir && targetFile.includes(outDir)) {
+          const sourceFile = targetFile.replace(outDir, rootDir).replace('.js', '.ts');
+          if (fs.existsSync(sourceFile)) targetFile = sourceFile;
+        }
+        if (!targetFile) continue;
+
+        // Look up the exported const value from the target file
+        const targetExports = fileExportsInfo.get(targetFile);
+        const constValue = targetExports?.namedConstValues?.[ref.identifier];
+        if (!constValue) continue;
+
+        // Resolve the glob pattern and add edges
+        const fileDir = path.dirname(file);
+        try {
+          let resolved = fg.sync(constValue, {
+            cwd: fileDir,
+            absolute: true,
+            ignore: ignorePatterns,
+            dot: false,
+          });
+          if (resolved.length === 0 && fileDir !== root) {
+            resolved = fg.sync(constValue, {
+              cwd: root,
+              absolute: true,
+              ignore: ignorePatterns,
+              dot: false,
+            });
+          }
+          for (const target of resolved) {
+            if (graph.nodes.has(target)) {
+              graph.addEdge(file, target);
+            }
+          }
+        } catch (_e) {
+          // silently skip unresolvable glob patterns
+        }
+      }
+    }
+  }
+
+  // Resolve implicitEdges from config and add them to the graph
+  if (fileCfg.implicitEdges && typeof fileCfg.implicitEdges === 'object') {
+    for (const [sourceAbs, globs] of Object.entries(fileCfg.implicitEdges)) {
+      if (!Array.isArray(globs)) continue;
+      for (const pattern of globs) {
+        try {
+          const resolved = fg.sync(pattern, {
+            cwd: root,
+            absolute: true,
+            ignore: ignorePatterns,
+            dot: false,
+          });
+          for (const target of resolved) {
+            if (graph.nodes.has(target)) {
+              graph.addEdge(sourceAbs, target);
+            }
+          }
+        } catch (_e) {
+          // silently skip unresolvable glob patterns
+        }
+      }
+    }
+  }
+
   // Build cross-file consumption index for exported symbols (JSON mode only)
   let consumptionIndex = undefined;
   if (collectSymbols) {
@@ -512,13 +639,9 @@ async function main() {
     console.log('Generating report...');
     // Compute live files via reachability from entrypoints and apply always-live
     let liveFiles = computeLiveFiles(graph, entrypoints);
-    // Always-live: expand live set with user globs
-    if (options.alwaysLive) {
-      const alwaysGlobs = String(options.alwaysLive)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const resolvedAlways = resolveGlobs(alwaysGlobs);
+    // Always-live: expand live set with CLI + config file globs
+    if (alwaysLiveGlobs.length > 0) {
+      const resolvedAlways = resolveGlobs(alwaysLiveGlobs);
       for (const p of resolvedAlways) {
         if (graph.nodes.has(p)) liveFiles.add(p);
       }
@@ -565,16 +688,12 @@ async function main() {
     console.log(`Orphan directories count: ${orphanDirs.length}`);
   } else {
     console.log('Finding orphans...');
-    // Reachability-based orphan files (apply always-live)
+    // Reachability-based orphan files (apply always-live from CLI + config)
     let liveFiles = computeLiveFiles(graph, entrypoints);
-    if (options.alwaysLive) {
-      const alwaysGlobs = String(options.alwaysLive)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+    if (alwaysLiveGlobs.length > 0) {
       const resolvedAlways = (function () {
         try {
-          return resolveGlobs(alwaysGlobs);
+          return resolveGlobs(alwaysLiveGlobs);
         } catch (_e) {
           return [];
         }

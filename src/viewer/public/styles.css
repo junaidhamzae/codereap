@@ -160,6 +160,7 @@ select {
   border-radius: 6px;
   cursor: pointer;
   background: white;
+  min-width: 200px;
 }
 
 select option {
@@ -643,10 +644,22 @@ h1{ font-size:1.25rem; margin:0; }
 .controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
   padding: 12px 0;
 }
 
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.copy-paths-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
 .strategy {
   display: flex;
   align-items: center;

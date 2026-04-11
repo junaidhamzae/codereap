@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, setSortDirs } from './state.js';
 import { humanBytes, extOf, copyText, firstSegment, highlightMatches } from './utils.js';
 
 // Sorting strategies
@@ -137,33 +137,87 @@ export function renderFileTable(tbodyEl, rows, filters, sortKey){
   }
 }
 
-export function renderDirControls(ctrlEl, rows, onChange){
-  ctrlEl.textContent='';
-  const sortSel=document.createElement('select');
-  sortSel.innerHTML = `
-    <option value="sizeDesc" title="Sort by total size (largest first) to identify high-impact directories">By total size (descending)</option>
-    <option value="fileCountDesc" title="Sort by number of files (most first) to find dense directories">By file count (descending)</option>
-    <option value="quickWins" title="Sort by total size (smallest first) to find easy cleanup targets">Quick wins (small first)</option>
-    <option value="segment" title="Group by top-level directory and sort by size to organize cleanup">By directory segment</option>
-  `;
-  sortSel.value = state.sortDirs;
-  const segmentSel=document.createElement('select'); segmentSel.style.display = state.sortDirs==='segment' ? '' : 'none';
-  sortSel.onchange=()=>{
-    segmentSel.style.display = sortSel.value==='segment' ? '' : 'none';
-    if (sortSel.value==='segment'){
-      const segs = Array.from(new Set(rows.map(r=>firstSegment(r.directory)))).sort();
-      segmentSel.innerHTML = '<option value="">(Select segment)</option>' + segs.map(s=>`<option value="${s}"${s===state.segment?' selected':''}>${s}</option>`).join('');
-    }
-    onChange({sort:sortSel.value, segment: segmentSel.value});
-  };
-  segmentSel.onchange=()=>onChange({sort:'segment', segment: segmentSel.value});
-  const copyBtn=document.createElement('button'); copyBtn.textContent='Copy paths'; copyBtn.onclick=()=>copyVisible();
-  ctrlEl.append(sortSel, segmentSel, copyBtn);
+export function renderDirControls(ctrlEl, rows, onChange) {
+  // Clear existing content
+  ctrlEl.textContent = '';
 
-  function copyVisible(){
-    const paths = Array.from(document.querySelectorAll('tbody tr')).map(tr=>tr.getAttribute('data-path')).filter(Boolean);
+  // Create container
+  const wrap = document.createElement('div');
+  wrap.className = 'controls';
+
+  // Left side controls container
+  const leftControls = document.createElement('div');
+  leftControls.className = 'left-controls';
+
+  // Strategy section
+  const strategyWrap = document.createElement('div');
+  strategyWrap.className = 'strategy';
+
+  // Strategy label
+  const strategyLabel = document.createElement('label');
+  strategyLabel.textContent = 'Strategy:';
+
+  // Strategy dropdown
+  const sortSel = document.createElement('select');
+  const strategies = [
+    { value: 'sizeDesc', text: 'By total size (descending)', title: 'Sort by total size (largest first) to identify high-impact directories' },
+    { value: 'fileCountDesc', text: 'By file count (descending)', title: 'Sort by number of files (most first) to find dense directories' },
+    { value: 'quickWins', text: 'Quick wins (small first)', title: 'Sort by total size (smallest first) to find easy cleanup targets' },
+    { value: 'segment', text: 'By directory segment', title: 'Group by top-level directory and sort by size to organize cleanup' }
+  ];
+  sortSel.innerHTML = strategies
+    .map(s => `<option value="${s.value}" title="${s.title}"${state.sortDirs === s.value ? ' selected' : ''}>${s.text}</option>`)
+    .join('');
+
+  // Segment selector
+  const segmentSel = document.createElement('select');
+  segmentSel.style.marginLeft = '8px';
+  const segments = Array.from(new Set(rows.map(r => firstSegment(r.directory)))).sort();
+  segmentSel.innerHTML = '<option value="">(Select segment)</option>' + 
+    segments.map(s => `<option value="${s}"${state.segment === s ? ' selected' : ''}>${s}</option>`).join('');
+
+  // Initial visibility
+  segmentSel.style.display = state.sortDirs === 'segment' ? '' : 'none';
+
+  // Strategy change handler
+  sortSel.onchange = () => {
+    const newSort = sortSel.value;
+    const isSegmentMode = newSort === 'segment';
+    
+    // Update segment selector
+    segmentSel.style.display = isSegmentMode ? '' : 'none';
+    if (!isSegmentMode) {
+      segmentSel.value = '';
+    }
+
+    // Update state
+    setSortDirs(newSort, isSegmentMode ? segmentSel.value : '');
+    onChange({ sort: newSort, segment: isSegmentMode ? segmentSel.value : '' });
+  };
+
+  // Segment change handler
+  segmentSel.onchange = () => {
+    const newSegment = segmentSel.value;
+    setSortDirs('segment', newSegment);
+    onChange({ sort: 'segment', segment: newSegment });
+  };
+
+  // Copy paths button
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = 'Copy paths';
+  copyBtn.className = 'copy-paths-btn';
+  copyBtn.onclick = () => {
+    const paths = Array.from(document.querySelectorAll('tbody tr'))
+      .map(tr => tr.getAttribute('data-path'))
+      .filter(Boolean);
     copyText(paths.join(','));
-  }
+  };
+
+  // Assemble the UI
+  strategyWrap.append(strategyLabel, sortSel);
+  leftControls.append(strategyWrap, segmentSel);
+  wrap.append(leftControls, copyBtn);
+  ctrlEl.append(wrap);
 }
 
 function toggleExpand(tr, record) {
@@ -224,8 +278,15 @@ function toggleExpand(tr, record) {
     imports.forEach(i => {
       const item = document.createElement('div');
       item.className = 'import-item';
-      const path = i.resolved;
-      item.innerHTML = `<span>${path}</span><button class="copy-btn" title="Copy path" onclick="event.stopPropagation(); navigator.clipboard.writeText('${path}')"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>`;
+      const importPath = i.resolved;
+      const span = document.createElement('span');
+      span.textContent = importPath;
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.title = 'Copy path';
+      copyBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+      copyBtn.onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(importPath); };
+      item.append(span, copyBtn);
       importsList.appendChild(item);
     });
     importsDiv.appendChild(importsList);

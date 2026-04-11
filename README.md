@@ -5,237 +5,206 @@
 
 > Harvest the living, reap the dead.
 
-CodeReap is a command‑line tool that helps you find dead (or “orphan”) files and directories in JavaScript/TypeScript projects. It scans your source tree, builds a dependency graph from your import/require statements, and determines which files are reachable from your project’s entry points. Anything not reachable is marked as an orphan, so you can confidently delete it and keep your repo lean.
+Find dead files in your JavaScript/TypeScript projects. CodeReap builds a dependency graph from your imports and tells you which files nothing uses.
 
----
-
-## Why use CodeReap?
-
-Modern codebases accumulate unused components, pages and modules over time. Those unused files bloat your repository and slow down refactoring. CodeReap acts like a grim reaper for your codebase — it identifies and reports the files or folders that nothing else imports. This helps you:
-
-- keep projects tidy and maintainable,
-- reduce bundle sizes by removing unused code,
-- catch mistaken imports or misconfigured aliases.
-
----
-
-## How it works
-
-- **Scan** – Recursively scans your project for source files (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss` by default). You can customise the set of extensions to include.
-- **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. Other file types are still represented as nodes.
-- **Parse** – JavaScript/TypeScript files are parsed with Babel to collect `import`, `require` and dynamic `import()` statements. For JSON file reports, CodeReap also collects exported symbols for all files and per‑import specifiers for orphan files. Other file types are still represented as nodes.
-- **Resolve** – Imports are resolved using relative paths, `baseUrl`/`paths` mappings from `tsconfig.json` or `jsconfig.json`, custom alias patterns and an optional `importRoot`. Node.js resolution is used as a last resort.
-- **Graph** – A directed graph is built where each file is a node and edges represent dependencies.
-- **Entrypoints** – Entrypoints are inferred from your `package.json` (`main`, `module`, `bin`), script commands (`node`, `nodemon`, `pm2 start`, `ts-node`, `tsx`, `babel-node`, or plain file references), and (when enabled) framework conventions. For Next.js, route files in `pages/` or `app/` and `middleware.{js,ts}` are auto‑seeded. When `rootDir` and `outDir` are defined, compiled JavaScript is mapped back to its TypeScript source.
-- **Prune (reachability)** – From entrypoints, the graph is traversed to find all live files. Files that are not reachable are marked as orphans.
-- **Report** – Results are written to JSON. File reports include the path, an existence flag, in‑degree (incoming edges, informational) and whether it is an orphan. Directory reports aggregate counts and whether a directory is orphan.
-
----
-
-## Installation
+## Quick Start
 
 ```bash
+# Install
 npm install -g codereap
+
+# Run in your project
+cd your-project
+codereap
+
+# View results interactively
+codereap --viewer
 ```
 
-Run `codereap --help` at any time to see available options.
+That's it. CodeReap auto-detects your entrypoints from `package.json` and frameworks like Next.js, scans all source files, and writes a `codereap-report.json` with every file marked as live or orphan.
 
 ---
 
-## Usage
+## What you get
 
-```bash
-codereap [options]
+```
+$ codereap --root ./my-app
+
+Project Source Entrypoints (relative): [ 'src/index.ts', 'src/cli.ts' ]
+Scanning for source files...
+Found 342 source files.
+Parsing files and building dependency graph...
+Report generated at codereap-report.json
+Orphan files count: 47
+Done.
 ```
 
-### Key options
+Each file in the report includes:
+- **`orphan: true/false`** — is this file reachable from any entrypoint?
+- **`size-bytes`** — file size, so you can prioritise cleanup by impact
+- **`in-degree`** — how many other files import it
+- **`symbols`** — per-export orphan tracking (which exports are actually consumed)
 
-- `--root <path>` – root directory to scan (defaults to current working directory)
-- `--extensions <exts>` – comma‑separated list of extensions (default: `js,ts,jsx,tsx,json,css,scss`)
-- `--exclude <patterns>` – comma‑separated glob patterns to ignore (e.g. `**/__tests__/**`)
-- `--out <path>` – base filename for the JSON report (default: `codereap-report.json`)
-- `--config <path>` – path to `codereap.config.json` (if present and not overridden)
-- `--importRoot <path>` – override the base directory used to resolve non‑relative imports
-- `--alias <pattern=target>` – one or more alias mappings (comma‑separate) like TypeScript `paths`
-- `--dirOnly` – aggregate by directory and report orphan directories instead of files
-- `--onlyOrphans` – include only orphan rows in the report
-- `--frameworkEntrypoints <auto|off>` – enable/disable framework auto‑seeding (default: `auto`)
-- `--entry <globs>` – comma‑separated glob(s) for extra entrypoints (relative to `--root`)
-- `--alwaysLive <globs>` – comma‑separated glob(s) to mark files as live regardless of traversal (relative to `--root`)
- - `--dynamicEdges <on|off>` – treat string‑literal dynamic imports (`import('...')`) as graph edges (default: `on`)
+---
 
-## Built-in Viewer (local)
+## Common Options
 
-CodeReap includes a built-in local web viewer for exploring reports interactively. The viewer runs a local static server and opens your browser to display the report in an easy-to-navigate interface.
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--root <path>` | Directory to scan | `.` |
+| `--extensions <exts>` | Comma-separated list of file extensions | `js,ts,jsx,tsx,json,css,scss` |
+| `--exclude <globs>` | Patterns to ignore (comma-separated) | — |
+| `--out <path>` | Base filename for the JSON report | `codereap-report` |
+| `--config <path>` | Path to `codereap.config.json` | auto-detected in root |
+| `--importRoot <path>` | Base directory for resolving non-relative imports | from tsconfig |
+| `--alias <mappings>` | Alias mappings like `@/*=src/*` (comma-separated) | from tsconfig |
+| `--entry <globs>` | Extra entrypoints beyond auto-detected | — |
+| `--alwaysLive <globs>` | Mark files as live regardless (e.g. i18n) | — |
+| `--dirOnly` | Report orphan directories instead of files | off |
+| `--onlyOrphans` | Only include orphan rows in the report | off |
+| `--viewer` | Open interactive web UI to explore results | off |
+| `--dynamicEdges <on\|off>` | Treat `import('...')` as graph edges | `on` |
+| `--frameworkEntrypoints <auto\|off>` | Auto-detect framework entry files | `auto` |
+
+Run `codereap --help` for the full list.
+
+---
+
+## Real-World Examples
+
+**Basic scan, exclude tests:**
+```bash
+codereap --root ./src --exclude "**/__tests__/**,**/*.spec.ts"
+```
+
+**Find orphan directories (folder-level cleanup):**
+```bash
+codereap --dirOnly --onlyOrphans
+```
+
+**Mark i18n and type defs as always live:**
+```bash
+codereap --alwaysLive "locales/**/*.json,**/*.d.ts"
+```
+
+**Add custom entrypoints:**
+```bash
+codereap --entry "scripts/**/*.js,src/cli/**/*.ts"
+```
+
+**Disable framework auto-seeding:**
+```bash
+codereap --frameworkEntrypoints off
+```
+
+---
+
+## Interactive Viewer
+
+CodeReap ships with a built-in local web UI for exploring reports.
 
 ```bash
 codereap --viewer
 codereap --viewer --port 5173
-codereap --viewer --host 0.0.0.0 --no-open
 ```
 
-### Viewer options
+1. Run `codereap --viewer` in your project
+2. Load a previously generated `codereap-report.json`
+3. **Explore Tree** — browse your project structure with expand/collapse
+4. **Prioritize Pruning** — sort orphans by size, file count, or export ratio
+5. **Copy paths** — copy file paths for cleanup scripts
 
-- `--viewer` – start the built-in local viewer instead of generating a report
-- `--port <port>` – specify port for the viewer server (default: 0 for ephemeral port)
-- `--host <host>` – specify host for the viewer server (default: 127.0.0.1)
-- `--no-open` – don't automatically open the browser
-
-### Using the viewer
-
-1. Run `codereap --viewer` in your project directory
-2. Your browser will open to the viewer interface
-3. Click "Select a CodeReap JSON report" and choose a previously generated report file (see [Interpreting the report](#interpreting-the-report) for expected JSON structure)
-4. Use the "Explore Tree" tab to browse your project structure with expand/collapse navigation
-5. Use the "Prioritize Pruning" tab to see tables of orphan files/directories sorted by size and other metrics
-6. Use "Copy" buttons to copy file paths for cleanup scripts
-
-**Privacy note**: The viewer runs entirely locally. Your report file is read with JavaScript's FileReader API in your browser and never uploaded anywhere.
+All processing happens in your browser. No data is uploaded.
 
 ---
 
-## Examples
+## Configuration File
 
-Scan the `src` folder, ignore tests and generate a prettified JSON report:
-
-```bash
-codereap --root ./src \
-  --exclude "**/__tests__/**,**/*.spec.ts" \
-  --out codereap-report
-```
-
-Aggregate by directory and only list orphan folders:
-
-```bash
-codereap --dirOnly --onlyOrphans --out codereap-dirs
-```
-
-Notes:
-- A JSON report is always written to `<out>.json` (default: `codereap-report.json`).
-- All paths in reports are relative to `--root`.
-- JSON output is always pretty‑printed.
-- Framework auto‑seeding currently supports Next.js (pages/, src/pages/, app/ routes, and middleware), respecting `--exclude`.
-- Reachability is computed from combined entrypoints (package.json + auto‑seeded + `--entry`). Files matching `--alwaysLive` are unioned into the live set after traversal.
-- In‑degree remains informational.
-- CSV output is no longer supported.
- - String‑literal dynamic imports add edges by default to improve reachability (disable with `--dynamicEdges off`). Non‑literal dynamic imports are not resolved; use `--alwaysLive` globs for those cases.
-
-Next.js auto detection (default):
-
-```bash
-codereap --root . --out codereap-report
-```
-
-Disable framework auto‑seeding:
-
-```bash
-codereap --root . --frameworkEntrypoints off --out codereap-report
-```
-
-Add custom entrypoints:
-
-```bash
-codereap --root . --entry "scripts/**/*.js,src/cli/**/*.{ts,js}" --out codereap-report
-```
-
-Mark files as always live (e.g. i18n, type defs):
-
-```bash
-codereap --root . --alwaysLive "locales/**/*.json,**/*.d.ts" --out codereap-report
-```
-
-Generate only orphan rows with enriched import targets (JSON):
-
-```bash
-codereap --root ./src --onlyOrphans --out codereap-orphans
-```
-
-Disable dynamic import edges (stricter pruning):
-
-```bash
-codereap --root . --dynamicEdges off --out codereap-report
-```
-
----
-
-## Working with aliases and tsconfig
-
-CodeReap will read `tsconfig.json` or `jsconfig.json` to honour `compilerOptions.baseUrl` and `paths` mappings and will automatically map built JavaScript files back to their TypeScript sources when `rootDir` and `outDir` are defined.
-
-You can override these settings on the command line with `--importRoot` and `--alias`. Settings may also be specified in a `codereap.config.json` file.
-
-Precedence is: CLI > codereap.config.json > tsconfig/jsconfig.
-
-### Example codereap.config.json
+Create a `codereap.config.json` in your project root to avoid passing flags every time:
 
 ```json
 {
   "root": ".",
   "extensions": ["js", "ts", "jsx", "tsx", "json", "css", "scss"],
   "exclude": ["**/__tests__/**", "**/*.spec.ts"],
+  "out": "codereap-report",
   "importRoot": "src",
   "aliases": {
-    "src/*": ["src/*"],
     "@/*": ["src/*"],
     "components/*": ["src/components/*"]
   },
-  
+  "alwaysLive": ["locales/**/*.json", "**/*.d.ts"],
+  "implicitEdges": {
+    "server/api/apiConfiguration.js": ["server/configs/*.js"]
+  }
 }
 ```
 
-You can then run:
+Then just run `codereap` — or override individual options via CLI flags.
 
-```bash
-codereap --config codereap.config.json
-```
+**Precedence:** CLI flags > `codereap.config.json` > `tsconfig.json`/`jsconfig.json`
 
-…and still override individual options via CLI flags as needed.
+### Aliases and tsconfig
 
-#### CLI alias examples (quote wildcards in zsh)
+CodeReap reads `compilerOptions.baseUrl` and `paths` from `tsconfig.json`/`jsconfig.json` automatically. Override with `--importRoot` and `--alias`:
 
 ```bash
 codereap --alias "@/*=src/*,components/*=src/components/*" --importRoot ./src
-codereap --alias "src/*=src/*" --root .
+```
+
+### Implicit Edges
+
+Some files load dependencies dynamically (e.g. `glob.sync('./configs/*.js')`). CodeReap auto-detects `glob.sync`/`globSync` patterns, including constant propagation across files. For patterns it can't detect, use `implicitEdges`:
+
+```json
+{
+  "implicitEdges": {
+    "src/loader.ts": ["src/plugins/**/*.ts"]
+  }
+}
 ```
 
 ---
 
-## External packages and logging
+## How It Works
 
-- Node modules are not scanned. CodeReap builds the graph only from files under `--root` and ignores `node_modules` by default.
-- Bare package imports (e.g., `react`, `next/navigation`) that cannot be resolved due to being simply missing will not print “Could not resolve …” noise. These common not‑found cases are suppressed to keep output clean.
-- CodeReap still logs meaningful resolver errors (with error codes), including:
-  - Relative/absolute import failures
-  - Package resolution errors other than not‑found (for example, `ERR_PACKAGE_PATH_NOT_EXPORTED`)
+1. **Scan** — finds source files via `fast-glob` (`.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.css`, `.scss`)
+2. **Parse** — extracts `import`, `require`, `export`, and `glob.sync()` calls via Babel AST
+3. **Resolve** — maps import specifiers to file paths (relative, aliases, `baseUrl`, Node.js resolution)
+4. **Graph** — builds a directed dependency graph (files = nodes, imports = edges)
+5. **Prune** — BFS from entrypoints marks all reachable files; the rest are orphans
+6. **Report** — writes JSON with file-level or directory-level orphan status and symbol details
 
-Notes:
-- If you use absolute aliases, set them via `tsconfig.json` (`compilerOptions.baseUrl`, `paths`), `--importRoot`, or `--alias` so local imports resolve cleanly.
-- External dependencies remain visible in JSON under `symbols.imports` as bare `source` entries with `resolved` omitted.
+### Entrypoint Detection
 
-## Interpreting the report
+CodeReap infers entrypoints from:
+- `package.json` fields: `main`, `module`, `bin`
+- npm scripts: commands using `node`, `nodemon`, `ts-node`, `tsx`, `pm2 start`, `babel-node`
+- **Next.js** (auto): `pages/**`, `app/**/page`, `app/**/layout`, `middleware.{js,ts}`
+- `--entry` flag: your custom globs
 
-When you run CodeReap without `--dirOnly`, each row in the report represents a file. Columns:
+### Glob Import Detection
 
-- `node` – relative path to the file
-- `exists` – always `true` for scanned files
-- `in‑degree` – number of other files that import it (informational)
-- `orphan` – `true` if the file is not reachable from any entry point
-- `size-bytes` – file size in bytes (best‑effort)
+CodeReap detects files loaded via glob patterns:
 
-When writing JSON file reports (orphan status reflects reachability from entrypoints, including framework‑seeded and user‑provided entries):
+```js
+// All of these are detected automatically:
+glob.sync('./configs/*.js')           // direct string literal
+const PATTERN = './configs/*.js';
+glob.sync(PATTERN)                     // same-file constant propagation
+globSync('./modules/*.ts')             // destructured import
+fg.sync('./pages/**/*.tsx')            // fast-glob alias
 
-- All rows include `symbols.exports` (per‑export usage):
-  - `default`: `{ exists: boolean, referencedInFile: boolean, orphan: boolean }`
-  - `named`: `Array<{ name: string, referencedInFile: boolean, orphan: boolean, reexport?: boolean }>`
-  - `reExports`: `Array<{ source: string, named?: string[], star?: boolean }>` (informational)
-- Only orphan rows include `symbols.imports`. Each item has:
-  - `source` (string) – as written in code
-  - `resolved` (string, optional) – root‑relative path when resolvable into the scanned graph
-  - `kind` (`'esm'|'cjs'|'dynamic'`)
-  - `imported` – `{ default: boolean, named: string[], namespace: boolean }`
-  - With `--onlyOrphans` (JSON), if `resolved` points to a scanned file, a `target` is included with `{ node, exports }` summarising that file’s exports.
+// Cross-file constant propagation also works:
+// constants.js: export const GLOB = './configs/*.js'
+// loader.js:    import { GLOB } from './constants'; glob.sync(GLOB)
+```
 
-Example orphan row (JSON):
+---
+
+## Report Format
+
+### File report (default)
 
 ```json
 {
@@ -243,6 +212,7 @@ Example orphan row (JSON):
   "exists": true,
   "in-degree": 0,
   "orphan": true,
+  "size-bytes": 1234,
   "symbols": {
     "exports": {
       "default": { "exists": false, "referencedInFile": false, "orphan": true },
@@ -251,125 +221,70 @@ Example orphan row (JSON):
         { "name": "sub", "referencedInFile": false, "orphan": true }
       ],
       "reExports": []
-    },
-    "imports": [
-      {
-        "source": "./consts",
-        "resolved": "src/utils/consts.ts",
-        "kind": "esm",
-        "imported": { "default": false, "named": ["PI"], "namespace": false },
-        "target": { "node": "src/utils/consts.ts", "exports": { "hasDefault": false, "named": ["PI", "E"], "reExports": [] } }
-      }
-    ]
+    }
   }
 }
 ```
 
-With `--dirOnly`, the report lists directories. Each record includes:
+### Directory report (`--dirOnly`)
 
-- `directory` – directory path (relative)
-- `file-count` – number of files in the directory
-- `external-in-degree` – imports coming from outside the directory
-- `orphan` – `true` when `file-count > 0`, `external-in-degree === 0`, and none of the files in the directory are reachable from any entrypoint
-- `size-bytes` – total size of files in the directory (best‑effort)
+```json
+{
+  "directory": "src/legacy",
+  "file-count": 12,
+  "external-in-degree": 0,
+  "orphan": true,
+  "size-bytes": 45678
+}
+```
 
-A file or directory flagged as `orphan` is a candidate for deletion. Some files (e.g. test fixtures or documentation) may be intentionally unreferenced — add their patterns to `--exclude` or your config file.
+A file/directory flagged `orphan` is a candidate for deletion. Some files (test fixtures, config files loaded by tools) may be intentionally unreferenced — add them to `--alwaysLive` or `--exclude`.
 
 ---
 
-## Limitations and tips
+## Limitations
 
-- Dynamic import expressions (`import(someVariable)`) and computed `require` calls are treated as dynamic and may not be fully resolved.
-- CodeReap does not analyse runtime module resolution (e.g. globbing or environment‑dependent imports); review results before deleting.
-- Only the file types you include are scanned; other assets (images, fonts, etc.) are ignored unless you add their extensions.
-- Running CodeReap regularly in CI can help prevent new orphan files from creeping in.
+- **Dynamic expressions** — `import(variable)` and computed `require()` can't be resolved statically. Use `--alwaysLive` for those.
+- **Runtime loaders** — environment-dependent imports or custom module loaders aren't traced. Review results before deleting.
+- **File types** — only included extensions are scanned; images, fonts, etc. are ignored unless you add their extensions.
+- **Tip:** run CodeReap in CI to catch new orphan files before they accumulate.
+
+---
+
+## External Packages
+
+- `node_modules` is never scanned. Only files under `--root` are graphed.
+- Bare package imports (`react`, `next/navigation`) that can't be resolved are silently skipped.
+- Meaningful resolver errors (e.g. `ERR_PACKAGE_PATH_NOT_EXPORTED`) are still logged.
+
+---
+
+## Development
+
+```bash
+npm install          # install deps
+npm run build        # compile TypeScript + bundle viewer
+npm test             # run all tests (unit + CLI integration)
+```
+
+### Publishing
+
+```bash
+npm run prepublish:check         # build + test
+npm version patch -m "v%s"       # bump, commit, tag, push
+npm publish                      # publish to npm
+```
+
+The `preversion` hook enforces a clean working tree. `postversion` auto-pushes with tags.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
-
-### Versioning and releasing
-
-We use npm's version workflow with guards:
-
-- preversion: aborts if the working tree isn't clean.
-- postversion: auto‑pushes the commit and tag created by `npm version`.
-
-Release steps:
-
-```bash
-# run build and tests locally
-npm run prepublish:check
-
-# bump version (patch/minor/major); creates commit + tag and pushes
-npm version patch -m "chore: v%s release notes"
-
-# publish to npm (requires auth)
-npm publish
-```
-
-Notes:
-- Ensure the tree is clean before `npm version` (the preversion guard enforces this).
-- `npm version` updates `package.json`, creates a git tag matching the version, and the postversion script pushes with `--follow-tags`.
-
----
-
-## Local development and testing
-
-Run the TypeScript build and the full test suite locally.
-
-1) Install deps
-
-```bash
-npm install
-```
-
-2) Build
-
-```bash
-npm run build
-```
-
-3) Run unit tests
-
-```bash
-npm test
-```
-
-4) Run CLI integration tests
-
-```bash
-npm run test:cli
-```
-
-Notes:
-
-- Tests include unit tests for core logic and CLI integration tests against fixtures.
-- CLI tests use normalized and deterministic JSON output; some suites use snapshots. If snapshots change, verify the diff is intentional before updating.
-
----
-
-## Pre‑publish checklist
-
-Before publishing a new version to npm, run the checklist script:
-
-```bash
-npm run prepublish:check
-```
-
-This will:
-
-- Build TypeScript sources
-- Run unit tests
-- Run CLI integration tests
-
-The project enforces strong coverage thresholds during tests, acting as a guard rail before publish.
+Contributions welcome! Open an issue or submit a pull request.
 
 ---
 
 ## License
 
 [MIT](LICENSE)
-
