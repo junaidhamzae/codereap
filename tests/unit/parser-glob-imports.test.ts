@@ -331,4 +331,16 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toBeDefined();
     expect(parsed.pathRefs).toContain(expected);
   }));
+
+  it('detects path.join with template literal argument (no expressions)', async () => withTempDir(async (root) => {
+    const file = path.join(root, 'helper.js');
+    fs.writeFileSync(file, [
+      "const path = require('path');",
+      "const p = path.join(__dirname, `../../public/snapshots/data.json`);",
+    ].join('\n'));
+    const parsed = await parseFile(file);
+    const expected = path.resolve(root, '../../public/snapshots/data.json');
+    expect(parsed.pathRefs).toBeDefined();
+    expect(parsed.pathRefs).toContain(expected);
+  }));
 });

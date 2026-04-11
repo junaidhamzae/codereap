@@ -11,6 +11,22 @@ export interface ResolveOptions {
 }
 
 function tryResolveAsFileOrDir(candidatePath: string, extensions: string[]): string | null {
+  // If the exact path is a file, return immediately
+  if (fs.existsSync(candidatePath)) {
+    const stats = fs.statSync(candidatePath);
+    if (stats.isFile()) {
+      return candidatePath;
+    }
+  }
+  // Try appending extensions FIRST (webpack-compatible: file-with-ext beats directory/index)
+  // This ensures that when both foo.js and foo/index.js exist, foo.js wins
+  for (const ext of extensions) {
+    const withExt = candidatePath + ext;
+    if (fs.existsSync(withExt)) {
+      return withExt;
+    }
+  }
+  // Then try directory with index file
   if (fs.existsSync(candidatePath)) {
     const stats = fs.statSync(candidatePath);
     if (stats.isDirectory()) {
@@ -20,14 +36,6 @@ function tryResolveAsFileOrDir(candidatePath: string, extensions: string[]): str
           return indexPath;
         }
       }
-      return null;
-    }
-    return candidatePath;
-  }
-  for (const ext of extensions) {
-    const withExt = candidatePath + ext;
-    if (fs.existsSync(withExt)) {
-      return withExt;
     }
   }
   // SCSS partial convention: try _filename.scss (e.g. @import 'mixins' → _mixins.scss)

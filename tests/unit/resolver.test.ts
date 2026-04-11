@@ -147,6 +147,38 @@ describe('resolver.resolveImport', () => {
     const resolved = resolveImport(from, './components', { root });
     expect(resolved).toBe(indexFile);
   }));
+
+  it('prefers file-with-extension over directory-with-index (webpack compat)', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'a.ts');
+    // Create both utils.js (file) and utils/index.js (directory with index)
+    const utilsFile = path.join(root, 'src', 'utils.js');
+    const utilsDir = path.join(root, 'src', 'utils');
+    const utilsIndex = path.join(utilsDir, 'index.js');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.mkdirSync(utilsDir, { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(utilsFile, '');
+    fs.writeFileSync(utilsIndex, '');
+
+    const resolved = resolveImport(from, './utils', { root });
+    expect(resolved).toBe(utilsFile);
+  }));
+
+  it('falls through to file-with-extension when directory has no index', () => withTempDir((root) => {
+    const from = path.join(root, 'src', 'a.ts');
+    // Create utils.js (file) and utils/ (directory WITHOUT index)
+    const utilsFile = path.join(root, 'src', 'utils.js');
+    const utilsDir = path.join(root, 'src', 'utils');
+    fs.mkdirSync(path.dirname(from), { recursive: true });
+    fs.mkdirSync(utilsDir, { recursive: true });
+    fs.writeFileSync(from, '');
+    fs.writeFileSync(utilsFile, '');
+    // Put a non-index file in the directory to ensure it exists
+    fs.writeFileSync(path.join(utilsDir, 'helper.js'), '');
+
+    const resolved = resolveImport(from, './utils', { root });
+    expect(resolved).toBe(utilsFile);
+  }));
 });
 
 

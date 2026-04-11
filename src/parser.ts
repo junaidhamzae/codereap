@@ -316,6 +316,14 @@ export async function parseFile(
         for (const arg of args) {
           if (arg.type === 'StringLiteral') {
             segments.push(arg.value);
+          } else if (
+            arg.type === 'TemplateLiteral' &&
+            arg.expressions.length === 0 &&
+            arg.quasis.length === 1 &&
+            arg.quasis[0].value.cooked
+          ) {
+            // Template literal with no expressions, e.g. `../../public/foo.json`
+            segments.push(arg.quasis[0].value.cooked);
           } else if (arg.type === 'Identifier' && arg.name === '__dirname') {
             segments.push(fileDir);
           } else if (arg.type === 'Identifier' && constStrings.has(arg.name)) {

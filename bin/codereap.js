@@ -210,22 +210,39 @@ async function main() {
     );
     const splitRegex = /\s*(?:&&|\|\||;|\n)\s*/g;
 
+    // Match runner + path without requiring file extension (e.g. "node scripts/prebuild")
+    const runnerNoExtRegex = new RegExp(
+      `(?:^|\\s)(?:${runners.join('|')})\\s+([\"\']?)([^\\s\"\']+)(?:\\1)(?=\\s|$)`,
+      'i'
+    );
+
     if (packageJson.scripts && typeof packageJson.scripts === 'object') {
       for (const val of Object.values(packageJson.scripts)) {
         if (typeof val !== 'string' || !val) continue;
         const parts = val.split(splitRegex);
         for (const part of parts) {
+          // 1) runner + file with extension
           let m = part.match(runnerRegex);
           if (m && m[2]) {
             const candidate = m[2];
             scriptEntrypoints.add(candidate);
             continue;
           }
-          // fallback: bare file token
+          // 2) bare file token with extension
           m = part.match(fileRegex);
           if (m && m[2]) {
             const candidate = m[2];
             scriptEntrypoints.add(candidate);
+            continue;
+          }
+          // 3) runner + path without extension (e.g. "node scripts/prebuild")
+          m = part.match(runnerNoExtRegex);
+          if (m && m[2]) {
+            const candidate = m[2];
+            // Skip flags/options and obvious non-paths
+            if (!candidate.startsWith('-') && candidate.includes('/')) {
+              scriptEntrypoints.add(candidate);
+            }
           }
         }
       }
@@ -535,6 +552,12 @@ async function main() {
   const dynamicEdgesOn =
     String(options.dynamicEdges || 'on').toLowerCase() !== 'off';
 
+  // Build resolver extensions list with .d.ts always included for TypeScript declaration files
+  const resolverExts = extensions.map((e) => (e.startsWith('.') ? e : `.${e}`));
+  if (resolverExts.includes('.ts') && !resolverExts.includes('.d.ts')) {
+    resolverExts.splice(resolverExts.indexOf('.ts') + 1, 0, '.d.ts');
+  }
+
   // Maps for cross-file constant propagation (glob resolution)
   const fileExportsInfo = new Map();    // abs path → exportsInfo (with namedConstValues)
   const fileUnresolvedGlobs = new Map(); // abs path → unresolvedGlobRefs[]
@@ -627,7 +650,7 @@ async function main() {
           root: mergedRoot,
           importRoot,
           paths,
-          extensions: extensions.map((e) => (e.startsWith('.') ? e : `.${e}`)),
+          extensions: resolverExts,
         });
         if (resolved) {
           if (rootDir && outDir && resolved.includes(outDir)) {
@@ -721,7 +744,7 @@ async function main() {
           root: mergedRoot,
           importRoot,
           paths,
-          extensions: extensions.map((e) => (e.startsWith('.') ? e : `.${e}`)),
+          extensions: resolverExts,
         });
         if (targetFile && rootDir && outDir && targetFile.includes(outDir)) {
           const sourceFile = targetFile.replace(outDir, rootDir).replace('.js', '.ts');
