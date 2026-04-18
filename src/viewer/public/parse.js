@@ -1,7 +1,15 @@
 const README_ANCHOR = 'See README → Interpreting the report.';
 export function parseReportText(text){
   let data; try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON. ' + README_ANCHOR); }
-  const rows = Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : data?.data ?? data;
+  const rows = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.files)
+      ? data.files
+      : Array.isArray(data?.directories)
+        ? data.directories
+        : Array.isArray(data?.rows)
+          ? data.rows
+          : data?.data ?? data;
   if (!Array.isArray(rows) || rows.length===0) throw new Error('Empty or invalid report. ' + README_ANCHOR);
   const sample = rows.find(Boolean) || {};
   const isDir = Object.prototype.hasOwnProperty.call(sample,'directory');
