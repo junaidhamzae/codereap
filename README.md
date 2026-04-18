@@ -3,9 +3,9 @@
 [![NPM Version](https://img.shields.io/npm/v/codereap.svg)](https://www.npmjs.com/package/codereap)
 [![License](https://img.shields.io/github/license/junaidhamzae/codereap.svg)](https://github.com/junaidhamzae/codereap/blob/main/LICENSE)
 
-> Harvest the living, reap the dead.
+> Clean dead code out of AI-accelerated codebases.
 
-**CodeReap** is a static reachability analyzer for JavaScript and TypeScript projects. It finds orphan files, orphan directories, and orphan exports — the dead code that quietly pollutes your repo, slows refactors, and confuses both humans and AI tools.
+**CodeReap** is a static reachability analyzer for JavaScript and TypeScript projects. It helps you find orphan files, orphan directories, and orphan exports before dead code quietly pollutes your repo, slows refactors, and confuses both humans and AI tools.
 
 CodeReap answers one question, grounded in graph reachability rather than hunches:
 
@@ -13,42 +13,21 @@ CodeReap answers one question, grounded in graph reachability rather than hunche
 
 ---
 
-## Table of Contents
-
-- [Why CodeReap](#why-codereap)
-- [Install](#install)
-- [Quick Start](#quick-start)
-- [Tracing a Single File](#tracing-a-single-file)
-- [The Analysis Cache](#the-analysis-cache)
-- [Interactive Viewer](#interactive-viewer)
-- [CLI Reference](#cli-reference)
-- [Configuration File](#configuration-file)
-- [What CodeReap Detects](#what-codereap-detects)
-- [Entrypoint Detection](#entrypoint-detection)
-- [Report Format](#report-format)
-- [How It Works](#how-it-works)
-- [Safety and Limitations](#safety-and-limitations)
-- [Suggested Workflow](#suggested-workflow)
-- [Development](#development)
-- [License](#license)
-
----
-
 ## Why CodeReap
 
 AI can generate code fast. Cleanup rarely keeps up.
 
-In the era of AI-led development and vibe coding, repos accumulate abandoned experiments, duplicate utilities, old routes, stale components, unused configs, and half-finished refactors faster than teams can manually prune them.
+In the era of AI-assisted development and vibe coding, repos accumulate abandoned experiments, duplicate utilities, stale components, old routes, unused configs, and half-finished refactors much faster than teams can manually prune them.
 
-That dead weight has real costs:
+That dead weight causes real problems:
 
 - developers waste time reading files that no longer matter
-- AI tools get noisier context and make worse suggestions
+- AI tools get noisier repo context and make worse suggestions
 - refactors feel riskier because nobody is fully sure what is safe to remove
 - onboarding gets harder as the codebase grows more misleading than useful
 - "temporary" code becomes permanent furniture
 
-CodeReap builds a dependency graph from real project entrypoints, traces supported file-loading patterns, and reports what is live versus what looks safe to review for deletion.
+CodeReap builds a dependency graph from real project entrypoints, traces supported file-loading patterns, and tells you what is live versus what looks safe to review for deletion.
 
 ### Why not just use lint rules?
 
@@ -59,9 +38,9 @@ CodeReap operates at a different level. It helps answer questions like:
 - Which files are truly unreachable from my app entrypoints?
 - Which folders can be removed as a unit?
 - Which exports exist but nobody consumes?
-- Which files only stay alive because of framework conventions, glob loading, or aliases?
+- Which files only stay alive because of framework conventions, glob loading, dynamic loading, or aliases?
 - What should I prune first for the biggest cleanup win?
-- **Why is _this specific file_ still reachable — which entrypoint keeps it alive?**
+- Why is this specific file still reachable — which entrypoint keeps it alive?
 
 It focuses on **reachability across the project**, not just local syntax hygiene.
 
@@ -94,8 +73,8 @@ CodeReap auto-detects entrypoints from `package.json` and supported framework co
 
 | File | Purpose |
 |------|---------|
-| `codereap-report.json` | Human-readable report of every file, its status, and its imports |
-| `.codereap-cache.json` | Analysis cache used by `codereap trace` (safe to commit or gitignore — your call) |
+| `codereap-report.json` | Report of every scanned file or directory, its status, and supporting metadata |
+| `.codereap-cache.json` | Analysis cache used by `codereap trace` |
 
 **Example output:**
 
@@ -114,7 +93,7 @@ Orphan files count: 47
 Done.
 ```
 
-Then open the interactive viewer to explore the results:
+Then open the interactive viewer:
 
 ```bash
 codereap --viewer
@@ -122,17 +101,24 @@ codereap --viewer
 
 ---
 
-## Tracing a Single File
+## The killer workflow: trace a single file
 
-Once you have generated a report, you can ask CodeReap why any specific file is alive — or why it is orphan:
+Once you have generated a report, you can ask CodeReap why any specific file is live — or why it is orphan.
 
 ```bash
 codereap trace src/utils/math.ts
 ```
 
-For a **live** file, CodeReap shows every entrypoint and every import chain keeping it alive:
+For a **live** file, CodeReap shows:
 
-```
+- which entrypoints keep it alive
+- every import chain from an entrypoint to the file
+- the type of each edge in that chain
+- direct importers of the file
+
+Example:
+
+```text
 FILE: src/utils/math.ts
 
 STATUS: live
@@ -151,9 +137,9 @@ DIRECT IMPORTERS: 2
   • src/commands/add.ts [dynamic-import]
 ```
 
-For an **orphan** file, CodeReap explains why nothing reaches it and offers contextual notes:
+For an **orphan** file, CodeReap explains why nothing reaches it and adds contextual notes when useful:
 
-```
+```text
 FILE: src/legacy/adapter.ts
 
 STATUS: orphan
@@ -167,6 +153,10 @@ NOTES:
   • This project uses dynamic imports — some orphan files may be loaded at runtime via expressions that could not be statically resolved.
 ```
 
+This is especially useful in AI-heavy workflows because it turns a vague cleanup question into a grounded one:
+
+**Can I delete this file, and why?**
+
 ### Trace options
 
 ```bash
@@ -175,32 +165,12 @@ codereap trace <file> [options]
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Show every chain and every importer (no truncation) |
+| `--all` | Show every chain and every importer |
 | `--json` | Emit structured JSON instead of formatted text |
-| `--root <path>` | Project root (defaults to `cwd`) |
+| `--root <path>` | Project root |
 | `--cachePath <path>` | Override cache file location |
 
 The file path may be relative to `--root` or absolute.
-
----
-
-## The Analysis Cache
-
-Every run of `codereap` writes `.codereap-cache.json` in the project root. It contains:
-
-- package version and generation timestamp
-- resolved project root
-- every file seen, every edge with its type, every entrypoint
-- precomputed live and orphan sets
-
-The cache is what makes `codereap trace` fast and context-aware. It is regenerated on every `codereap` run, so it is always consistent with your latest scan.
-
-You can:
-
-- **`.gitignore` it** if you regenerate on demand (recommended for most teams)
-- **Commit it** if you want everyone to share the same cached analysis
-- **Override its location** with `--cachePath` or `cachePath` in the config file
-- **Delete it** with `codereap --purge-cache`
 
 ---
 
@@ -225,7 +195,52 @@ All processing stays local. No code is uploaded anywhere.
 
 ---
 
-## CLI Reference
+## What CodeReap detects
+
+CodeReap handles far more than straightforward `import` statements.
+
+It can account for:
+
+- **ESM imports, re-exports, and string-literal dynamic `import(...)`**
+- **CommonJS `require(...)`**
+- **Path aliases** from `tsconfig.json` / `jsconfig.json`
+- **Custom alias mappings** and custom import roots
+- **Stylesheet imports** — `@import`, `@use`, `@forward` in SCSS and CSS
+- **Glob-based loading** — `glob.sync(...)`, `globSync(...)`, `fast-glob`, including same-file and cross-file constant propagation
+- **`path.join(...)` / `path.resolve(...)`** references when arguments can be resolved statically
+- **Framework conventions** — Next.js routes, middleware, instrumentation hooks, Storybook config, preview files, and stories
+- **npm script entrypoints** referenced from `package.json`
+- **Convention/tooling files** such as `tsconfig.json`, `.eslintrc.*`, `.prettierrc`, `jest.config.*`, `.env.*`, and `Dockerfile`, which are auto-marked as always-live
+
+Every edge in the dependency graph is tagged with a type such as:
+
+- `static-import`
+- `dynamic-import`
+- `glob`
+- `path-ref`
+- `implicit`
+- `cross-file-glob`
+
+That edge typing shows up in reports and trace output, so you can see not only that a file is reachable, but **how** it is reachable.
+
+---
+
+## Entrypoint detection
+
+CodeReap infers entrypoints from:
+
+- `package.json` fields such as `main`, `module`, and `bin`
+- npm scripts using commands like `node`, `nodemon`, `ts-node`, `tsx`, `pm2 start`, and `babel-node`
+- Next.js conventions such as `pages/**`, `src/pages/**`, `app/**/page`, `app/**/layout`, `app/**/error`, `app/**/loading`, `app/**/not-found`, `middleware.{js,ts}`, `instrumentation.*`, and `next.config.*`
+- Storybook config and story globs discovered from `.storybook/main.*`
+- custom entry globs passed through `--entry`
+- files matched by `alwaysLive` globs and auto-detected convention files
+
+You can turn off framework auto-seeding with `--frameworkEntrypoints off` if you want a stricter view.
+
+---
+
+## CLI reference
 
 ### Main command
 
@@ -241,7 +256,7 @@ codereap [options]
 | `--out <path>` | Base filename for the JSON report (no extension) | `{root}/codereap-report` |
 | `--config <path>` | Path to `codereap.config.json` | auto-detected in root |
 | `--importRoot <path>` | Base directory for non-relative imports | from tsconfig/jsconfig |
-| `--alias <mappings>` | Alias mappings like `@/*=src/*` (comma-separated) | from tsconfig/jsconfig |
+| `--alias <mappings>` | Alias mappings like `@/*=src/*` | from tsconfig/jsconfig |
 | `--entry <globs>` | Extra entrypoint globs beyond auto-detected ones | — |
 | `--alwaysLive <globs>` | Mark files as live regardless of reachability | — |
 | `--dirOnly` | Report orphan directories instead of files | off |
@@ -252,16 +267,16 @@ codereap [options]
 | `--port <port>` | Viewer port | ephemeral |
 | `--host <host>` | Viewer host | `127.0.0.1` |
 | `--no-open` | Do not auto-open the viewer in a browser | off |
-| `--cachePath <path>` | Override cache file location (no extension) | `{root}/.codereap-cache` |
-| `--purge-cache` | Delete the cache file and exit | — |
+| `--cachePath <path>` | Override cache file location | `{root}/.codereap-cache` |
+| `--purge-cache` | Delete the cache file and exit | off |
 
-### Subcommand
+### Trace subcommand
 
 ```bash
 codereap trace <file> [options]
 ```
 
-See [Tracing a Single File](#tracing-a-single-file).
+See [The killer workflow: trace a single file](#the-killer-workflow-trace-a-single-file).
 
 ### Help
 
@@ -272,7 +287,7 @@ codereap trace --help
 
 ---
 
-## Configuration File
+## Configuration file
 
 Create a `codereap.config.json` at your project root to avoid repeating flags:
 
@@ -299,7 +314,9 @@ Create a `codereap.config.json` at your project root to avoid repeating flags:
 
 ### Always-live files
 
-Some files are intentionally unreferenced in code but still matter: i18n JSON, declaration files, tool-consumed configs. Mark them explicitly:
+Some files are intentionally unreferenced in code but still matter: i18n JSON, declaration files, config files loaded by tools, and framework convention files.
+
+Mark them explicitly when needed:
 
 ```json
 { "alwaysLive": ["locales/**/*.json", "**/*.d.ts"] }
@@ -307,7 +324,9 @@ Some files are intentionally unreferenced in code but still matter: i18n JSON, d
 
 ### Implicit edges
 
-Some files load dependencies indirectly in ways static analysis cannot infer (custom plugin systems, runtime registries, etc.). Declare those edges explicitly:
+Some files load dependencies indirectly in ways static analysis cannot infer, such as plugin systems or runtime registries.
+
+Declare those edges explicitly:
 
 ```json
 {
@@ -317,52 +336,21 @@ Some files load dependencies indirectly in ways static analysis cannot infer (cu
 }
 ```
 
-Keys are source files; values are glob patterns describing the files they depend on.
+Keys are source files. Values are glob patterns describing the files they depend on.
 
-### Aliases and tsconfig/jsconfig
+### Cache path
 
-CodeReap reads `compilerOptions.baseUrl` and `paths` from `tsconfig.json` / `jsconfig.json` automatically. Override with `--alias` and `--importRoot` when needed.
+You can override the analysis cache location in config or on the CLI:
 
----
+```json
+{ "cachePath": ".codereap-cache" }
+```
 
-## What CodeReap Detects
-
-CodeReap handles far more than straightforward `import` statements:
-
-- **ESM imports, re-exports, and dynamic `import(...)` with string literals**
-- **CommonJS `require(...)`**
-- **Path aliases** from `tsconfig.json` / `jsconfig.json`
-- **Custom alias mappings** and custom import roots
-- **Stylesheet imports** — `@import`, `@use`, `@forward` in SCSS and CSS
-- **Glob-based loading** — `glob.sync(...)`, `globSync(...)`, `fast-glob`, including:
-  - direct string literals: `glob.sync('./configs/*.js')`
-  - same-file constant propagation: `const P = './configs/*'; glob.sync(P)`
-  - **cross-file constant propagation** across imported modules
-- **`path.join(...)` / `path.resolve(...)`** file references when arguments can be resolved statically
-- **Framework conventions** — Next.js routes (Pages and App Router), middleware, instrumentation hooks, Storybook config and stories
-- **npm script entrypoints** — files referenced in `package.json` scripts via `node`, `nodemon`, `ts-node`, `tsx`, `pm2 start`, `babel-node`
-- **Convention/tooling files** — `tsconfig.json`, `.eslintrc.*`, `.prettierrc`, `jest.config.*`, `.env.*`, `Dockerfile`, etc. are auto-marked as always-live
-
-Every edge in the dependency graph is tagged with its **type**: `static-import`, `dynamic-import`, `glob`, `path-ref`, `implicit`, or `cross-file-glob`. This shows up in both the report and in `codereap trace` output, so you always know _how_ one file reaches another.
+This is useful if you want to commit the cache, share it across workflows, or place it somewhere else.
 
 ---
 
-## Entrypoint Detection
-
-CodeReap infers entrypoints from:
-
-- `package.json` fields: `main`, `module`, `bin`
-- **npm scripts** — commands like `node`, `nodemon`, `ts-node`, `tsx`, `pm2 start`, `babel-node` are parsed for file arguments
-- **Next.js** — `pages/**`, `src/pages/**`, `app/**/page`, `app/**/layout`, `app/**/error`, `app/**/loading`, `app/**/not-found`, `middleware.{js,ts}`, `instrumentation.*`, `next.config.*`
-- **Storybook** — `.storybook/main.*`, `.storybook/preview.*`, and all story globs parsed from the main config
-- `--entry` globs you provide manually
-- Any file under `alwaysLive` globs or auto-detected convention files
-
-You can turn off framework auto-seeding with `--frameworkEntrypoints off` if you want a stricter view.
-
----
-
-## Report Format
+## Report format
 
 ### File report (default)
 
@@ -394,7 +382,16 @@ You can turn off framework auto-seeding with `--frameworkEntrypoints off` if you
           "reExports": []
         },
         "imports": [
-          { "source": "./constants", "resolved": "src/utils/constants.ts", "kind": "esm", "imported": { "default": false, "named": ["PI"], "namespace": false } }
+          {
+            "source": "./constants",
+            "resolved": "src/utils/constants.ts",
+            "kind": "esm",
+            "imported": {
+              "default": false,
+              "named": ["PI"],
+              "namespace": false
+            }
+          }
         ]
       }
     }
@@ -402,15 +399,15 @@ You can turn off framework auto-seeding with `--frameworkEntrypoints off` if you
 }
 ```
 
-Each file record includes:
+Each file record can include:
 
 - **`orphan`** — whether the file is reachable from any entrypoint
 - **`in-degree`** — how many other files depend on it
 - **`imported-by`** — direct importers, each tagged with edge type
 - **`entrypoints`** — every entrypoint that can reach this file
 - **`size-bytes`** — file size, useful for prioritising by impact
-- **`symbols.exports`** — export-level orphan tracking (per default and named export)
-- **`symbols.imports`** — detailed import specifiers (included for orphan rows)
+- **`symbols.exports`** — export-level orphan tracking
+- **`symbols.imports`** — detailed import specifiers for orphan rows
 
 ### Directory report (`--dirOnly`)
 
@@ -438,21 +435,45 @@ A file or directory marked `orphan` is a strong candidate for review and possibl
 
 ---
 
-## How It Works
+## The analysis cache
 
-1. **Scan** — finds source files via `fast-glob`
-2. **Parse** — extracts imports, exports, dynamic imports, stylesheet directives, glob calls, and supported path-based references
-3. **Resolve** — maps import specifiers to file paths using relative resolution, aliases, import roots, tsconfig/jsconfig paths, and Node resolution
-4. **Graph** — builds a directed dependency graph where files are nodes and references are typed edges
-5. **Prune** — performs reachability analysis from entrypoints to determine what is live
-6. **Report** — writes JSON with file-level or directory-level orphan status and symbol details
-7. **Cache** — persists the full analysis state for instant `codereap trace` queries
+Every run of `codereap` writes `.codereap-cache.json` in the project root unless you override it.
 
-This is why CodeReap is useful for identifying deletion candidates grounded in graph reachability rather than hunches.
+It contains:
+
+- package version and generation timestamp
+- resolved project root
+- every scanned file
+- every typed edge in the graph
+- the full entrypoint set
+- precomputed reachable and orphan sets
+
+This cache is what makes `codereap trace` fast and context-aware.
+
+You can:
+
+- ignore it in git and regenerate on demand
+- commit it if you want shared analysis state
+- override its location with `--cachePath` or `cachePath`
+- delete it with `codereap --purge-cache`
 
 ---
 
-## Safety and Limitations
+## How it works
+
+1. **Scan** — find source files with `fast-glob`
+2. **Parse** — extract imports, exports, dynamic imports, stylesheet directives, glob calls, and supported path-based references
+3. **Resolve** — map import specifiers to files using relative resolution, aliases, import roots, tsconfig/jsconfig paths, and Node resolution
+4. **Graph** — build a directed dependency graph where files are nodes and references are typed edges
+5. **Prune** — compute reachability from real entrypoints to determine what is live
+6. **Report** — write JSON with file-level or directory-level orphan status and symbol details
+7. **Cache** — persist the analysis state for instant `codereap trace` queries
+
+That is why CodeReap is useful for finding deletion candidates grounded in graph reachability instead of hunches.
+
+---
+
+## Safety and limitations
 
 CodeReap is a **static analysis tool**, not a blind delete tool.
 
@@ -472,23 +493,23 @@ Known limitations:
 - only files under the configured root are graphed
 - bare package imports such as `react` or `next/navigation` that cannot be resolved to local files are skipped
 
-### What orphan notes tell you
+### Helpful orphan notes
 
-When a file is marked orphan, the `codereap trace` output will proactively flag:
+When a file is marked orphan, `codereap trace` can proactively flag:
 
-- whether the project uses dynamic imports (which could load files at runtime)
-- whether the filename matches a convention-based pattern (`middleware.*`, `*.config.*`, `*.d.ts`, `_app.*`, `*.stories.*`, etc.)
-- whether the _entire directory_ is orphan (a strong signal to delete as a unit)
+- whether the project uses dynamic imports
+- whether the filename resembles a convention-based pattern
+- whether the entire directory is orphan and may be removable as a unit
 
 That honesty is a feature. CodeReap aims to be useful without pretending static analysis can read minds.
 
 ---
 
-## Suggested Workflow
+## Suggested workflow
 
 1. Run CodeReap after a large refactor, feature spike, or AI-assisted cleanup
-2. Inspect top orphan candidates by size and reachability
-3. For any surprising result, run `codereap trace <file>` to see exactly why
+2. Sort top orphan candidates by size and reachability
+3. Use `codereap trace <file>` for any surprising or high-value candidate
 4. Review framework- or tooling-driven files carefully
 5. Mark intentional exceptions with `alwaysLive` or `implicitEdges`
 6. Clean up in small, reviewable batches
@@ -497,13 +518,13 @@ That honesty is a feature. CodeReap aims to be useful without pretending static 
 CodeReap is especially useful:
 
 - after AI-assisted refactors
-- after feature spikes and rapid prototyping
+- after rapid prototyping and spikes
 - before handing a repo to an AI agent for implementation
 - before or after large migrations
 - before archiving or sunsetting product areas
-- as a CI guardrail to stop dead code from piling up
+- as a CI guardrail against dead code buildup
 
-Less dead code means less junk for AI to read, summarize, reason over, or confidently misunderstand.
+Less dead code means less junk for humans and AI to read, summarize, reason over, or confidently misunderstand.
 
 ---
 
@@ -520,12 +541,12 @@ npm test
 ### Useful scripts
 
 ```bash
-npm run test:unit           # unit tests only
-npm run test:cli            # end-to-end CLI tests (builds first)
-npm run prepublish:check    # build + full test suite
+npm run test:unit
+npm run test:cli
+npm run prepublish:check
 ```
 
-Contributions are welcome — detection improvements, reduced false positives, new framework support, and viewer polish are all fair game. Open an issue or pull request.
+Contributions are welcome — detection improvements, reduced false positives, framework support, and viewer polish are all fair game.
 
 ---
 
