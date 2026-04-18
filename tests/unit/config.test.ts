@@ -1,15 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { loadCodereapConfig, mergeResolutionOptions, loadTsJsConfig } from '../../src/config';
-
-function withTempDir(run: (dir: string) => void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-'));
-  try { run(dir); } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('config.loadCodereapConfig', () => {
-  it('defaults and normalizes relative paths', () => withTempDir((root) => {
+  it('defaults and normalizes relative paths', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({ root: '.', importRoot: 'src', out: 'rep', aliases: { '@/*': 'src/*' } }));
     const cfg = loadCodereapConfig(root);
@@ -19,7 +14,7 @@ describe('config.loadCodereapConfig', () => {
     expect(cfg.paths).toEqual({ '@/*': ['src/*'] });
   }));
 
-  it('no file config present falls back to defaults', () => withTempDir((root) => {
+  it('no file config present falls back to defaults', () => withTempDir('config-', (root) => {
     const cfg = loadCodereapConfig(root);
     expect(cfg.root).toBe(root);
     expect(cfg.exclude).toEqual([]);
@@ -42,7 +37,7 @@ describe('config.mergeResolutionOptions', () => {
 });
 
 describe('config.loadCodereapConfig alwaysLive', () => {
-  it('loads alwaysLive globs from config file', () => withTempDir((root) => {
+  it('loads alwaysLive globs from config file', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({
       alwaysLive: ['locales/**/*.json', '**/*.d.ts'],
@@ -51,14 +46,14 @@ describe('config.loadCodereapConfig alwaysLive', () => {
     expect(cfg.alwaysLive).toEqual(['locales/**/*.json', '**/*.d.ts']);
   }));
 
-  it('returns undefined alwaysLive when not present in config', () => withTempDir((root) => {
+  it('returns undefined alwaysLive when not present in config', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({ root: '.' }));
     const cfg = loadCodereapConfig(root);
     expect(cfg.alwaysLive).toBeUndefined();
   }));
 
-  it('returns undefined alwaysLive for empty array', () => withTempDir((root) => {
+  it('returns undefined alwaysLive for empty array', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({ alwaysLive: [] }));
     const cfg = loadCodereapConfig(root);
@@ -67,7 +62,7 @@ describe('config.loadCodereapConfig alwaysLive', () => {
 });
 
 describe('config.loadCodereapConfig implicitEdges', () => {
-  it('resolves implicitEdges keys to absolute paths', () => withTempDir((root) => {
+  it('resolves implicitEdges keys to absolute paths', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({
       implicitEdges: {
@@ -81,14 +76,14 @@ describe('config.loadCodereapConfig implicitEdges', () => {
     expect(cfg.implicitEdges![path.resolve(root, 'src/loader.ts')]).toEqual(['src/modules/*.ts', 'src/plugins/*.ts']);
   }));
 
-  it('returns undefined implicitEdges when not present in config', () => withTempDir((root) => {
+  it('returns undefined implicitEdges when not present in config', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({ root: '.' }));
     const cfg = loadCodereapConfig(root);
     expect(cfg.implicitEdges).toBeUndefined();
   }));
 
-  it('ignores implicitEdges entries with non-array values', () => withTempDir((root) => {
+  it('ignores implicitEdges entries with non-array values', () => withTempDir('config-', (root) => {
     const cfgPath = path.join(root, 'codereap.config.json');
     fs.writeFileSync(cfgPath, JSON.stringify({
       implicitEdges: {
@@ -104,7 +99,7 @@ describe('config.loadCodereapConfig implicitEdges', () => {
 });
 
 describe('config.loadTsJsConfig', () => {
-  it('reads baseUrl and paths from tsconfig.json', () => withTempDir((root) => {
+  it('reads baseUrl and paths from tsconfig.json', () => withTempDir('config-', (root) => {
     const tsconfig = {
       compilerOptions: {
         baseUrl: 'src',

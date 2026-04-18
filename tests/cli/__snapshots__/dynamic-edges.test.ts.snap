@@ -3,7 +3,11 @@
 exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dynamicEdges off 1`] = `
 [
   {
+    "entrypoints": [
+      "A.ts",
+    ],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "A.ts",
     "orphan": false,
@@ -28,7 +32,9 @@ exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dyn
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "C.ts",
     "orphan": true,
@@ -54,7 +60,9 @@ exports[`CLI dynamic edges on/off marks C.ts live by default and orphan when dyn
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "package.json",
     "orphan": false,

@@ -1,20 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { resolveImport, type ResolveOptions } from '../../src/resolver';
-
-function withTempDir(run: (dir: string) => void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resolver-'));
-  try {
-    run(dir);
-  } finally {
-    // best-effort cleanup
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-  }
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('resolver.resolveImport', () => {
-  it('resolves relative files and extension fallback', () => withTempDir((root) => {
+  it('resolves relative files and extension fallback', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const target = path.join(root, 'src', 'b.ts');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -27,7 +17,7 @@ describe('resolver.resolveImport', () => {
     expect(rel).toBe(target);
   }));
 
-  it('resolves directory index', () => withTempDir((root) => {
+  it('resolves directory index', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const dir = path.join(root, 'src', 'lib');
     const index = path.join(dir, 'index.ts');
@@ -40,7 +30,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(index);
   }));
 
-  it('uses importRoot for absolute-like specifiers', () => withTempDir((root) => {
+  it('uses importRoot for absolute-like specifiers', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const under = path.join(root, 'src', 'utils', 'x.ts');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -52,7 +42,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(under);
   }));
 
-  it('resolves via ts/jsconfig-style paths with wildcards and multi-star', () => withTempDir((root) => {
+  it('resolves via ts/jsconfig-style paths with wildcards and multi-star', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const comp = path.join(root, 'src', 'components', 'Button', 'index.ts');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -75,7 +65,7 @@ describe('resolver.resolveImport', () => {
     expect(p2).toBe(comp);
   }));
 
-  it('resolves .d.ts extension', () => withTempDir((root) => {
+  it('resolves .d.ts extension', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const target = path.join(root, 'src', 'types.d.ts');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -86,7 +76,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(target);
   }));
 
-  it('prefers .ts over .d.ts when both exist', () => withTempDir((root) => {
+  it('prefers .ts over .d.ts when both exist', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const tsFile = path.join(root, 'src', 'foo.ts');
     const dtsFile = path.join(root, 'src', 'foo.d.ts');
@@ -99,7 +89,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(tsFile);
   }));
 
-  it('resolves SCSS partials (_filename.scss)', () => withTempDir((root) => {
+  it('resolves SCSS partials (_filename.scss)', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'main.scss');
     const partial = path.join(root, 'src', '_mixins.scss');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -110,7 +100,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(partial);
   }));
 
-  it('prefers non-partial over partial SCSS files', () => withTempDir((root) => {
+  it('prefers non-partial over partial SCSS files', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'main.scss');
     const regular = path.join(root, 'src', 'mixins.scss');
     const partial = path.join(root, 'src', '_mixins.scss');
@@ -123,7 +113,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(regular);
   }));
 
-  it('resolves SCSS partial with exact _filename match (no extension added)', () => withTempDir((root) => {
+  it('resolves SCSS partial with exact _filename match (no extension added)', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'main.scss');
     const partial = path.join(root, 'src', '_helpers.scss');
     fs.mkdirSync(path.dirname(from), { recursive: true });
@@ -136,7 +126,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(partial);
   }));
 
-  it('resolves directory with index.tsx fallback', () => withTempDir((root) => {
+  it('resolves directory with index.tsx fallback', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     const dir = path.join(root, 'src', 'components');
     const indexFile = path.join(dir, 'index.tsx');
@@ -148,7 +138,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(indexFile);
   }));
 
-  it('prefers file-with-extension over directory-with-index (webpack compat)', () => withTempDir((root) => {
+  it('prefers file-with-extension over directory-with-index (webpack compat)', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     // Create both utils.js (file) and utils/index.js (directory with index)
     const utilsFile = path.join(root, 'src', 'utils.js');
@@ -164,7 +154,7 @@ describe('resolver.resolveImport', () => {
     expect(resolved).toBe(utilsFile);
   }));
 
-  it('falls through to file-with-extension when directory has no index', () => withTempDir((root) => {
+  it('falls through to file-with-extension when directory has no index', () => withTempDir('resolver-', (root) => {
     const from = path.join(root, 'src', 'a.ts');
     // Create utils.js (file) and utils/ (directory WITHOUT index)
     const utilsFile = path.join(root, 'src', 'utils.js');

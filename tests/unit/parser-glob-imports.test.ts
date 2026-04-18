@@ -1,21 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { parseFile } from '../../src/parser';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-glob-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('parser glob imports', () => {
-  it('captures glob.sync() with string literal pattern', async () => withTempDir(async (root) => {
+  it('captures glob.sync() with string literal pattern', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -25,7 +14,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual(['./configs/*.js']);
   }));
 
-  it('captures glob.globSync() with string literal pattern', async () => withTempDir(async (root) => {
+  it('captures glob.globSync() with string literal pattern', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -35,7 +24,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual(['./routes/**/*.ts']);
   }));
 
-  it('captures destructured globSync() call', async () => withTempDir(async (root) => {
+  it('captures destructured globSync() call', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.ts');
     fs.writeFileSync(file, [
       "const { globSync } = require('glob');",
@@ -45,7 +34,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual(['./modules/*.ts']);
   }));
 
-  it('captures fg.sync() (fast-glob alias)', async () => withTempDir(async (root) => {
+  it('captures fg.sync() (fast-glob alias)', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.ts');
     fs.writeFileSync(file, [
       "const fg = require('fast-glob');",
@@ -55,7 +44,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual(['./pages/**/*.tsx']);
   }));
 
-  it('captures multiple glob patterns in the same file', async () => withTempDir(async (root) => {
+  it('captures multiple glob patterns in the same file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'multi.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -70,14 +59,14 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toHaveLength(2);
   }));
 
-  it('returns empty globImports when no glob calls are present', async () => withTempDir(async (root) => {
+  it('returns empty globImports when no glob calls are present', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'plain.js');
     fs.writeFileSync(file, "const x = require('./foo');");
     const parsed = await parseFile(file);
     expect(parsed.globImports).toEqual([]);
   }));
 
-  it('resolves glob.sync with const variable via constant propagation', async () => withTempDir(async (root) => {
+  it('resolves glob.sync with const variable via constant propagation', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'dynamic.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -88,7 +77,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual(['./configs/*.js']);
   }));
 
-  it('ignores glob.sync with non-const non-literal argument', async () => withTempDir(async (root) => {
+  it('ignores glob.sync with non-const non-literal argument', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'dynamic.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -99,7 +88,7 @@ describe('parser glob imports', () => {
     expect(parsed.globImports).toEqual([]);
   }));
 
-  it('returns empty globImports for non-script files', async () => withTempDir(async (root) => {
+  it('returns empty globImports for non-script files', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'data.json');
     fs.writeFileSync(file, '{"key": "value"}');
     const parsed = await parseFile(file);
@@ -108,7 +97,7 @@ describe('parser glob imports', () => {
 });
 
 describe('cross-file constant propagation', () => {
-  it('records unresolvedGlobRefs when glob uses a CJS imported identifier', async () => withTempDir(async (root) => {
+  it('records unresolvedGlobRefs when glob uses a CJS imported identifier', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.js');
     fs.writeFileSync(file, [
       "const { PATTERN } = require('./constants');",
@@ -122,7 +111,7 @@ describe('cross-file constant propagation', () => {
     ]);
   }));
 
-  it('records unresolvedGlobRefs when glob uses an ESM imported identifier', async () => withTempDir(async (root) => {
+  it('records unresolvedGlobRefs when glob uses an ESM imported identifier', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.ts');
     fs.writeFileSync(file, [
       "import { CONFIG_GLOB } from './constants';",
@@ -136,7 +125,7 @@ describe('cross-file constant propagation', () => {
     ]);
   }));
 
-  it('records unresolvedGlobRefs for globSync with imported identifier', async () => withTempDir(async (root) => {
+  it('records unresolvedGlobRefs for globSync with imported identifier', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.js');
     fs.writeFileSync(file, [
       "const { globSync } = require('glob');",
@@ -150,7 +139,7 @@ describe('cross-file constant propagation', () => {
     ]);
   }));
 
-  it('does not record unresolvedGlobRefs when const is resolved locally', async () => withTempDir(async (root) => {
+  it('does not record unresolvedGlobRefs when const is resolved locally', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'loader.js');
     fs.writeFileSync(file, [
       "const glob = require('glob');",
@@ -162,7 +151,7 @@ describe('cross-file constant propagation', () => {
     expect(parsed.unresolvedGlobRefs).toEqual([]);
   }));
 
-  it('exports namedConstValues for export const with string literal', async () => withTempDir(async (root) => {
+  it('exports namedConstValues for export const with string literal', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'constants.ts');
     fs.writeFileSync(file, [
       "export const GLOB_PATTERN = './server/configs/*.js';",
@@ -177,7 +166,7 @@ describe('cross-file constant propagation', () => {
     });
   }));
 
-  it('exports namedConstValues for re-exported const strings via export { X }', async () => withTempDir(async (root) => {
+  it('exports namedConstValues for re-exported const strings via export { X }', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'constants.ts');
     fs.writeFileSync(file, [
       "const MY_GLOB = './plugins/*.js';",
@@ -190,7 +179,7 @@ describe('cross-file constant propagation', () => {
     });
   }));
 
-  it('exports namedConstValues for module.exports style not tracked (CJS limitation)', async () => withTempDir(async (root) => {
+  it('exports namedConstValues for module.exports style not tracked (CJS limitation)', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'constants.js');
     fs.writeFileSync(file, [
       "const PATTERN = './configs/*.js';",
@@ -203,28 +192,28 @@ describe('cross-file constant propagation', () => {
 });
 
 describe('SCSS @import/@use/@forward parsing', () => {
-  it('extracts @import from .scss file', async () => withTempDir(async (root) => {
+  it('extracts @import from .scss file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'styles.scss');
     fs.writeFileSync(file, "@import 'foo';");
     const parsed = await parseFile(file);
     expect(parsed.imports).toContain('foo');
   }));
 
-  it('extracts @use from .scss file', async () => withTempDir(async (root) => {
+  it('extracts @use from .scss file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'styles.scss');
     fs.writeFileSync(file, "@use 'bar';");
     const parsed = await parseFile(file);
     expect(parsed.imports).toContain('bar');
   }));
 
-  it('extracts @forward from .scss file', async () => withTempDir(async (root) => {
+  it('extracts @forward from .scss file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'styles.scss');
     fs.writeFileSync(file, "@forward 'baz';");
     const parsed = await parseFile(file);
     expect(parsed.imports).toContain('baz');
   }));
 
-  it('extracts multiple directives from one .scss file', async () => withTempDir(async (root) => {
+  it('extracts multiple directives from one .scss file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'theme.scss');
     fs.writeFileSync(file, [
       "@import 'variables';",
@@ -236,21 +225,21 @@ describe('SCSS @import/@use/@forward parsing', () => {
     expect(parsed.imports).toHaveLength(3);
   }));
 
-  it('returns empty imports for CSS without @import', async () => withTempDir(async (root) => {
+  it('returns empty imports for CSS without @import', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'plain.css');
     fs.writeFileSync(file, 'body { color: red; }');
     const parsed = await parseFile(file);
     expect(parsed.imports).toEqual([]);
   }));
 
-  it('extracts @import from .css file', async () => withTempDir(async (root) => {
+  it('extracts @import from .css file', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'styles.css');
     fs.writeFileSync(file, "@import 'reset';");
     const parsed = await parseFile(file);
     expect(parsed.imports).toContain('reset');
   }));
 
-  it('returns collectSymbols fields for stylesheet files', async () => withTempDir(async (root) => {
+  it('returns collectSymbols fields for stylesheet files', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'styles.scss');
     fs.writeFileSync(file, "@use 'theme';");
     const parsed = await parseFile(file, { collectSymbols: true });
@@ -261,7 +250,7 @@ describe('SCSS @import/@use/@forward parsing', () => {
 });
 
 describe('path.join/path.resolve detection', () => {
-  it('detects path.join(__dirname, ...) and returns resolved pathRefs', async () => withTempDir(async (root) => {
+  it('detects path.join(__dirname, ...) and returns resolved pathRefs', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'server.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -273,7 +262,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toContain(expected);
   }));
 
-  it('detects path.resolve(__dirname, ...) and returns resolved pathRefs', async () => withTempDir(async (root) => {
+  it('detects path.resolve(__dirname, ...) and returns resolved pathRefs', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'server.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -285,7 +274,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toContain(expected);
   }));
 
-  it('does NOT include path.join with non-resolvable arguments in pathRefs', async () => withTempDir(async (root) => {
+  it('does NOT include path.join with non-resolvable arguments in pathRefs', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'server.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -295,7 +284,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toBeUndefined();
   }));
 
-  it('resolves path.join with const propagation', async () => withTempDir(async (root) => {
+  it('resolves path.join with const propagation', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'server.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -308,7 +297,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toContain(expected);
   }));
 
-  it('returns pathRefs in collectSymbols mode too', async () => withTempDir(async (root) => {
+  it('returns pathRefs in collectSymbols mode too', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'server.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -320,7 +309,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toContain(expected);
   }));
 
-  it('detects path.join with only string literals (no __dirname)', async () => withTempDir(async (root) => {
+  it('detects path.join with only string literals (no __dirname)', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'build.js');
     fs.writeFileSync(file, [
       "const path = require('path');",
@@ -332,7 +321,7 @@ describe('path.join/path.resolve detection', () => {
     expect(parsed.pathRefs).toContain(expected);
   }));
 
-  it('detects path.join with template literal argument (no expressions)', async () => withTempDir(async (root) => {
+  it('detects path.join with template literal argument (no expressions)', async () => withTempDir('parser-glob-', async (root) => {
     const file = path.join(root, 'helper.js');
     fs.writeFileSync(file, [
       "const path = require('path');",

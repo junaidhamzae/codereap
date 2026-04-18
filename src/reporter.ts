@@ -1,14 +1,24 @@
 import * as fs from 'fs/promises';
 import path from 'path';
 import { Graph } from './grapher';
+import type { EdgeType } from './grapher';
 import type { ExportInfo, ImportSpecifierInfo } from './parser';
 
-export async function reportGraph(
-  graph: Graph,
-  outPath: string,
-  projectRoot: string,
-  onlyOrphans?: boolean,
-  liveFiles?: Set<string>,
+export interface ReportMetadata {
+  version: string;
+  timestamp: string;
+  root: string;
+  entrypoints: string[];
+  'total-files': number;
+  'orphan-count': number;
+  'live-count': number;
+}
+
+export interface ReportGraphOptions {
+  outPath: string;
+  projectRoot: string;
+  onlyOrphans?: boolean;
+  liveFiles?: Set<string>;
   symbols?: Map<
     string,
     {
@@ -19,7 +29,7 @@ export async function reportGraph(
         named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
       };
     }
-  >,
+  >;
   consumptionIndex?: Map<
     string,
     {
@@ -27,7 +37,7 @@ export async function reportGraph(
       namespaceConsumed: boolean;
       namedConsumed: Set<string>;
     }
-  >,
+  >;
   exportUsageMap?: Map<
     string,
     | {
@@ -35,9 +45,28 @@ export async function reportGraph(
         named: Record<string, { localName?: string; referencedInFile: boolean; reexport?: boolean }>;
       }
     | undefined
-  >,
-  entrypointSet?: Set<string>
+  >;
+  entrypointSet?: Set<string>;
+  packageVersion?: string;
+}
+
+export interface ReportDirectoriesOptions {
+  outPath: string;
+  projectRoot: string;
+  onlyOrphans?: boolean;
+  liveFiles?: Set<string>;
+  packageVersion?: string;
+}
+
+export async function reportGraph(
+  graph: Graph,
+  options: ReportGraphOptions
 ): Promise<string | undefined> {
+  const {
+    outPath, projectRoot, onlyOrphans, liveFiles,
+    symbols, consumptionIndex, exportUsageMap,
+    entrypointSet, packageVersion,
+  } = options;
   // Always write JSON
 
   // Precompute file sizes for all nodes (best-effort)
@@ -65,6 +94,44 @@ export async function reportGraph(
     }
   }
 
+  // Build imported-by map: file → [{file, type}]
+  const importedByMap = new Map<string, Array<{ file: string; type: EdgeType }>>();
+  for (const [from, to] of graph.edges) {
+    if (!importedByMap.has(to)) importedByMap.set(to, []);
+    importedByMap.get(to)!.push({
+      file: from,
+      type: graph.getEdgeType(from, to),
+    });
+  }
+
+  // Build entrypoint reachability map: file → set of entrypoints that reach it
+  const fileEntrypoints = new Map<string, Set<string>>();
+  if (liveFiles && entrypointSet) {
+    // BFS from each entrypoint separately to track which entrypoints reach which files
+    const forwardAdj = new Map<string, string[]>();
+    for (const [from, to] of graph.edges) {
+      if (!forwardAdj.has(from)) forwardAdj.set(from, []);
+      forwardAdj.get(from)!.push(to);
+    }
+
+    for (const ep of entrypointSet) {
+      if (!graph.nodes.has(ep)) continue;
+      const visited = new Set<string>();
+      const queue = [ep];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (visited.has(current)) continue;
+        visited.add(current);
+        if (!fileEntrypoints.has(current)) fileEntrypoints.set(current, new Set());
+        fileEntrypoints.get(current)!.add(ep);
+        const neighbors = forwardAdj.get(current) || [];
+        for (const next of neighbors) {
+          if (!visited.has(next)) queue.push(next);
+        }
+      }
+    }
+  }
+
   // Build per-node records with requested fields and root-relative node paths
   let records: Array<{ [key: string]: any }> = nodes.map(nodeAbs => {
     const node = path.relative(projectRoot, nodeAbs);
@@ -74,6 +141,13 @@ export async function reportGraph(
       node,
       exists: true,
       'in-degree': inDeg,
+      'imported-by': (importedByMap.get(nodeAbs) || []).map(imp => ({
+        file: path.relative(projectRoot, imp.file),
+        type: imp.type,
+      })),
+      entrypoints: fileEntrypoints.has(nodeAbs)
+        ? Array.from(fileEntrypoints.get(nodeAbs)!).map(ep => path.relative(projectRoot, ep)).sort()
+        : [],
       orphan,
       'size-bytes': sizeByNode.get(nodeAbs) ?? null,
     };
@@ -161,11 +235,29 @@ export async function reportGraph(
   // Sort records by node for determinism
   records.sort((a, b) => String(a.node).localeCompare(String(b.node)));
 
+  // Compute counts from the full (unfiltered) records
+  const orphanCount = records.filter(r => Boolean(r['orphan'])).length;
+  const liveCount = records.length - orphanCount;
+
   if (onlyOrphans) {
     records = records.filter(r => Boolean(r['orphan']));
   }
 
-  const jsonString = JSON.stringify(records, null, 2);
+  // Build report with metadata wrapper
+  const report: { [key: string]: any } = {
+    version: packageVersion || 'unknown',
+    timestamp: new Date().toISOString(),
+    root: projectRoot,
+    entrypoints: entrypointSet
+      ? Array.from(entrypointSet).map(ep => path.relative(projectRoot, ep)).sort()
+      : [],
+    'total-files': nodes.length,
+    'orphan-count': orphanCount,
+    'live-count': liveCount,
+    files: records,
+  };
+
+  const jsonString = JSON.stringify(report, null, 2);
   const jsonPath = `${outPath}.json`;
   await fs.writeFile(jsonPath, jsonString);
   return jsonPath;
@@ -227,11 +319,9 @@ export function computeDirectoryRecords(
 
 export async function reportDirectories(
   graph: Graph,
-  outPath: string,
-  projectRoot: string,
-  onlyOrphans?: boolean,
-  liveFiles?: Set<string>
+  options: ReportDirectoriesOptions
 ): Promise<string | undefined> {
+  const { outPath, projectRoot, onlyOrphans, liveFiles, packageVersion } = options;
   // Always write JSON
 
   let records = computeDirectoryRecords(graph, projectRoot, liveFiles);
@@ -251,13 +341,29 @@ export async function reportDirectories(
     })
   );
   records = records.map((r) => ({ ...r, 'size-bytes': dirSizes[r.directory] || 0 }));
+
+  // Compute counts from the full (unfiltered) records before filtering
+  const totalDirectories = records.length;
+  const orphanCount = records.filter(r => r.orphan).length;
+  const liveCount = totalDirectories - orphanCount;
+
   if (onlyOrphans) {
     records = records.filter(r => r.orphan);
   }
 
-  const jsonString = JSON.stringify(records, null, 2);
+  // Build report with metadata wrapper
+  const report: { [key: string]: any } = {
+    version: packageVersion || 'unknown',
+    timestamp: new Date().toISOString(),
+    root: projectRoot,
+    'total-directories': totalDirectories,
+    'orphan-count': orphanCount,
+    'live-count': liveCount,
+    directories: records,
+  };
+
+  const jsonString = JSON.stringify(report, null, 2);
   const jsonPath = `${outPath}.json`;
   await fs.writeFile(jsonPath, jsonString);
   return jsonPath;
 }
-

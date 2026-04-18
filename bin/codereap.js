@@ -16,6 +16,17 @@ const {
   loadCodereapConfig,
   loadTsJsConfig,
   mergeResolutionOptions,
+  writeCache,
+  readCache,
+  purgeCache,
+  getCachePath,
+  CacheNotFoundError,
+  CacheVersionMismatchError,
+  CacheRootMismatchError,
+  traceFile,
+  formatTraceResult,
+  traceResultToJSON,
+  FileNotInAnalysisError,
 } = require('../dist/index');
 
 const program = new Command();
@@ -38,8 +49,7 @@ program
   )
   .option(
     '--out <path>',
-    'Output file path for the report (without extension)',
-    'codereap-report'
+    'Output file path for the report (without extension; defaults to {root}/codereap-report)'
   )
   .option('--config <path>', 'Path to codereap.config.json (optional)')
   .option(
@@ -77,14 +87,85 @@ program
   .option('--port <port>', 'Viewer port (default: 0 for ephemeral)')
   .option('--host <host>', 'Viewer host (default: 127.0.0.1)', '127.0.0.1')
   .option('--no-open', 'Do not open browser automatically')
-  .parse(process.argv);
+  .option('--purge-cache', 'Delete the analysis cache file and exit')
+  .option('--cachePath <path>', 'Override cache file location (without .json extension)');
 
-const options = program.opts();
+// Handle the trace subcommand before Commander parses (avoids subcommand interference)
+const isTraceCommand = process.argv.length > 2 && process.argv[2] === 'trace';
 
-async function main() {
+if (isTraceCommand) {
+  // Use a separate Commander instance for robust arg parsing + --help support
+  const traceProgram = new Command('codereap trace');
+  traceProgram
+    .description('Trace why a file is live or orphan using the analysis cache')
+    .argument('<file>', 'File path to trace (relative to --root or absolute)')
+    .option('--all', 'Show all chains and entrypoints (no truncation)', false)
+    .option('--json', 'Output trace results as JSON', false)
+    .option('--root <path>', 'Root directory of the project', process.cwd())
+    .option('--cachePath <path>', 'Override cache file location')
+    .action(async (file, opts) => {
+      try {
+        const root = path.resolve(opts.root);
+        // Resolve effective cache path: CLI > config > default
+        let effectiveCachePath = opts.cachePath ? path.resolve(opts.cachePath) : undefined;
+        if (!effectiveCachePath) {
+          const fileCfg = loadCodereapConfig(root);
+          if (fileCfg.cachePath) effectiveCachePath = fileCfg.cachePath;
+        }
+        const cache = await readCache(root, pkg.version, effectiveCachePath);
+        const result = traceFile(file, cache, root);
+        if (opts.json) {
+          console.log(JSON.stringify(traceResultToJSON(result, root), null, 2));
+        } else {
+          console.log(formatTraceResult(result, root, { showAll: opts.all }));
+        }
+      } catch (err) {
+        if (
+          err instanceof CacheNotFoundError ||
+          err instanceof CacheVersionMismatchError ||
+          err instanceof CacheRootMismatchError ||
+          err instanceof FileNotInAnalysisError
+        ) {
+          console.error(`Error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+  traceProgram.parseAsync(process.argv.slice(1)).catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+} else {
+  program.parse(process.argv);
+  const options = program.opts();
+  main(options).catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+async function main(options) {
   const root = path.resolve(options.root);
 
   const getSrc = (name) => program.getOptionValueSource(name);
+
+  // Resolve effective cache path early: CLI --cachePath > config cachePath > default
+  const fileCfgEarly = loadCodereapConfig(root, options.config);
+  const effectiveCachePath = options.cachePath
+    ? path.resolve(options.cachePath)
+    : fileCfgEarly.cachePath || undefined;
+
+  // Handle --purge-cache
+  if (options.purgeCache) {
+    const deleted = await purgeCache(root, effectiveCachePath);
+    if (deleted) {
+      console.log(`Cache purged: ${getCachePath(root, effectiveCachePath)}`);
+    } else {
+      console.log('No cache file found.');
+    }
+    return;
+  }
 
   // Viewer short-circuit
   if (options.viewer) {
@@ -103,8 +184,8 @@ async function main() {
   // Load ts/jsconfig baseUrl & paths
   const tsjs = loadTsJsConfig(root);
 
-  // Load codereap.config.json
-  const fileCfg = loadCodereapConfig(root, options.config);
+  // Reuse config loaded earlier (for cachePath resolution)
+  const fileCfg = fileCfgEarly;
 
   const extensions =
     getSrc('extensions') === 'cli'
@@ -123,11 +204,13 @@ async function main() {
       : [];
 
   // Determine effective output settings early (for gating symbol collection later)
+  // When --out is not explicitly provided, default to project root (not CWD)
   const effectiveOut =
-    getSrc('out') === 'cli' ? options.out : fileCfg.out || options.out;
-  const effectiveOnlyOrphans = options.onlyOrphans === true;
-  const collectSymbols = true; // always collect for JSON output
-
+    getSrc('out') === 'cli'
+      ? options.out
+      : fileCfg.out
+        ? fileCfg.out
+        : path.join(root, 'codereap-report');
   // Parse CLI alias mappings into paths-style object
   let cliPaths = undefined;
   if (options.alias) {
@@ -172,6 +255,15 @@ async function main() {
         ? path.join(root, tsconfig.compilerOptions.outDir)
         : undefined;
     }
+  }
+
+  /** Map a built JS path back to its TypeScript source when rootDir/outDir are configured */
+  function mapBuiltToSource(resolved) {
+    if (rootDir && outDir && resolved.includes(outDir)) {
+      const sourceFile = resolved.replace(outDir, rootDir).replace('.js', '.ts');
+      if (fs.existsSync(sourceFile)) return sourceFile;
+    }
+    return resolved;
   }
 
   const packageJsonPath = path.join(root, 'package.json');
@@ -249,24 +341,12 @@ async function main() {
     }
 
     const rawEntrypoints = [...main, ...module, ...bin];
-    entrypoints = rawEntrypoints
-      .map((p) => {
-        if (rootDir && outDir && p.includes(outDir)) {
-          const sourceFile = p.replace(outDir, rootDir).replace('.js', '.ts');
-          if (fs.existsSync(sourceFile)) return sourceFile;
-        }
-        return p;
-      })
-      .filter(Boolean);
+    entrypoints = rawEntrypoints.map(mapBuiltToSource).filter(Boolean);
 
     // Append script entrypoints (resolve relative to root, map built->source when possible)
     for (const rel of scriptEntrypoints) {
       const abs = path.resolve(root, rel);
-      let finalPath = abs;
-      if (rootDir && outDir && abs.includes(outDir)) {
-        const sourceFile = abs.replace(outDir, rootDir).replace('.js', '.ts');
-        if (fs.existsSync(sourceFile)) finalPath = sourceFile;
-      }
+      const finalPath = mapBuiltToSource(abs);
       if (fs.existsSync(finalPath)) {
         // If it's a directory, try to resolve to index file
         if (fs.statSync(finalPath).isDirectory()) {
@@ -566,7 +646,7 @@ async function main() {
     allFilesToParse.map(async (file) => {
       const { imports, importSpecs, exportsInfo, exportUsage, globImports, unresolvedGlobRefs, pathRefs } =
         await parseFile(file, {
-          collectSymbols,
+          collectSymbols: true,
         });
 
       // Resolve glob-based imports (e.g. glob.sync('./configs/*.js'))
@@ -592,7 +672,7 @@ async function main() {
             }
             for (const target of resolved) {
               if (graph.nodes.has(target)) {
-                graph.addEdge(file, target);
+                graph.addEdge(file, target, 'glob');
               }
             }
           } catch (_e) {
@@ -631,7 +711,7 @@ async function main() {
             }
           }
           if (resolved && graph.nodes.has(resolved)) {
-            graph.addEdge(file, resolved);
+            graph.addEdge(file, resolved, 'path-ref');
           }
         }
       }
@@ -653,15 +733,10 @@ async function main() {
           extensions: resolverExts,
         });
         if (resolved) {
-          if (rootDir && outDir && resolved.includes(outDir)) {
-            const sourceFile = resolved
-              .replace(outDir, rootDir)
-              .replace('.js', '.ts');
-            if (fs.existsSync(sourceFile)) resolved = sourceFile;
-          }
+          resolved = mapBuiltToSource(resolved);
 
           if (graph.nodes.has(resolved)) {
-            graph.addEdge(file, resolved);
+            graph.addEdge(file, resolved, 'static-import');
           }
         }
       }
@@ -683,55 +758,43 @@ async function main() {
             ),
           });
           if (resolvedDyn) {
-            if (rootDir && outDir && resolvedDyn.includes(outDir)) {
-              const sourceFileDyn = resolvedDyn
-                .replace(outDir, rootDir)
-                .replace('.js', '.ts');
-              if (fs.existsSync(sourceFileDyn)) resolvedDyn = sourceFileDyn;
-            }
+            resolvedDyn = mapBuiltToSource(resolvedDyn);
             if (graph.nodes.has(resolvedDyn)) {
-              graph.addEdge(file, resolvedDyn);
+              graph.addEdge(file, resolvedDyn, 'dynamic-import');
             }
           }
         }
       }
 
-      if (collectSymbols) {
-        // Build enriched import specs with resolved absolute targets when in graph
-        const enriched = Array.isArray(importSpecs)
-          ? importSpecs.map((spec) => {
-              let resolved = resolveImport(file, spec.source, {
-                root: mergedRoot,
-                importRoot,
-                paths,
-                extensions: extensions.map((e) =>
-                  e.startsWith('.') ? e : `.${e}`
-                ),
-              });
-              if (resolved) {
-                if (rootDir && outDir && resolved.includes(outDir)) {
-                  const sourceFile = resolved
-                    .replace(outDir, rootDir)
-                    .replace('.js', '.ts');
-                  if (fs.existsSync(sourceFile)) resolved = sourceFile;
-                }
-                if (!graph.nodes.has(resolved)) {
-                  resolved = undefined;
-                }
+      // Build enriched import specs with resolved absolute targets when in graph
+      const enriched = Array.isArray(importSpecs)
+        ? importSpecs.map((spec) => {
+            let resolved = resolveImport(file, spec.source, {
+              root: mergedRoot,
+              importRoot,
+              paths,
+              extensions: extensions.map((e) =>
+                e.startsWith('.') ? e : `.${e}`
+              ),
+            });
+            if (resolved) {
+              resolved = mapBuiltToSource(resolved);
+              if (!graph.nodes.has(resolved)) {
+                resolved = undefined;
               }
-              return { ...spec, resolved };
-            })
-          : [];
-        fileToSymbols.set(file, {
-          exports: exportsInfo || {
-            hasDefault: false,
-            named: [],
-            reExports: [],
-          },
-          importSpecs: enriched,
-          exportUsage,
-        });
-      }
+            }
+            return { ...spec, resolved };
+          })
+        : [];
+      fileToSymbols.set(file, {
+        exports: exportsInfo || {
+          hasDefault: false,
+          named: [],
+          reExports: [],
+        },
+        importSpecs: enriched,
+        exportUsage,
+      });
     })
   );
 
@@ -746,9 +809,8 @@ async function main() {
           paths,
           extensions: resolverExts,
         });
-        if (targetFile && rootDir && outDir && targetFile.includes(outDir)) {
-          const sourceFile = targetFile.replace(outDir, rootDir).replace('.js', '.ts');
-          if (fs.existsSync(sourceFile)) targetFile = sourceFile;
+        if (targetFile) {
+          targetFile = mapBuiltToSource(targetFile);
         }
         if (!targetFile) continue;
 
@@ -776,7 +838,7 @@ async function main() {
           }
           for (const target of resolved) {
             if (graph.nodes.has(target)) {
-              graph.addEdge(file, target);
+              graph.addEdge(file, target, 'cross-file-glob');
             }
           }
         } catch (_e) {
@@ -800,7 +862,7 @@ async function main() {
           });
           for (const target of resolved) {
             if (graph.nodes.has(target)) {
-              graph.addEdge(sourceAbs, target);
+              graph.addEdge(sourceAbs, target, 'implicit');
             }
           }
         } catch (_e) {
@@ -810,82 +872,95 @@ async function main() {
     }
   }
 
-  // Build cross-file consumption index for exported symbols (JSON mode only)
-  let consumptionIndex = undefined;
-  if (collectSymbols) {
-    const map = new Map();
-    for (const [, info] of fileToSymbols.entries()) {
-      const specs = info.importSpecs || [];
-      for (const spec of specs) {
-        if (!spec || !spec.resolved) continue;
-        if (spec.kind === 'dynamic') continue;
-        const key = spec.resolved;
-        if (!map.has(key)) {
-          map.set(key, {
-            defaultConsumed: false,
-            namespaceConsumed: false,
-            namedConsumed: new Set(),
-          });
-        }
-        const entry = map.get(key);
-        if (spec.imported.default) entry.defaultConsumed = true;
-        if (spec.imported.namespace) entry.namespaceConsumed = true;
-        if (Array.isArray(spec.imported.named)) {
-          for (const nm of spec.imported.named) entry.namedConsumed.add(nm);
-        }
+  // Build cross-file consumption index for exported symbols
+  const consumptionIndex = new Map();
+  for (const [, info] of fileToSymbols.entries()) {
+    const specs = info.importSpecs || [];
+    for (const spec of specs) {
+      if (!spec || !spec.resolved) continue;
+      if (spec.kind === 'dynamic') continue;
+      const key = spec.resolved;
+      if (!consumptionIndex.has(key)) {
+        consumptionIndex.set(key, {
+          defaultConsumed: false,
+          namespaceConsumed: false,
+          namedConsumed: new Set(),
+        });
+      }
+      const entry = consumptionIndex.get(key);
+      if (spec.imported.default) entry.defaultConsumed = true;
+      if (spec.imported.namespace) entry.namespaceConsumed = true;
+      if (Array.isArray(spec.imported.named)) {
+        for (const nm of spec.imported.named) entry.namedConsumed.add(nm);
       }
     }
-    consumptionIndex = map;
   }
 
-  {
-    console.log('Generating report...');
-    // Compute live files via reachability from entrypoints and apply always-live
-    let liveFiles = computeLiveFiles(graph, entrypoints);
-    // Always-live: expand live set with CLI + config file globs
-    if (alwaysLiveGlobs.length > 0) {
-      const resolvedAlways = resolveGlobs(alwaysLiveGlobs);
-      for (const p of resolvedAlways) {
-        if (graph.nodes.has(p)) liveFiles.add(p);
-      }
-    }
-    // Convention files are always live
-    for (const p of conventionAlwaysLive) {
+  // Compute live files once — reused for report, cache, and console summary
+  console.log('Generating report...');
+  const liveFiles = computeLiveFiles(graph, entrypoints);
+  // Always-live: expand live set with CLI + config file globs
+  if (alwaysLiveGlobs.length > 0) {
+    const resolvedAlways = resolveGlobs(alwaysLiveGlobs);
+    for (const p of resolvedAlways) {
       if (graph.nodes.has(p)) liveFiles.add(p);
     }
-    const writtenPath = options.dirOnly
-      ? await reportDirectories(
-          graph,
-          effectiveOut,
-          mergedRoot,
-          options.onlyOrphans,
-          liveFiles
-        )
-      : await reportGraph(
-          graph,
-          effectiveOut,
-          mergedRoot,
-          options.onlyOrphans,
-          liveFiles,
-          collectSymbols ? fileToSymbols : undefined,
-          collectSymbols ? consumptionIndex : undefined,
-          collectSymbols
-            ? new Map(
-                Array.from(fileToSymbols.entries()).map(([k, v]) => [
-                  k,
-                  v.exportUsage || undefined,
-                ])
-              )
-            : undefined,
-          new Set(entrypoints)
-        );
-    console.log(`Report generated at ${writtenPath}`);
+  }
+  // Convention files are always live
+  for (const p of conventionAlwaysLive) {
+    if (graph.nodes.has(p)) liveFiles.add(p);
   }
 
+  const entrypointSet = new Set(entrypoints);
+
+  const writtenPath = options.dirOnly
+    ? await reportDirectories(graph, {
+        outPath: effectiveOut,
+        projectRoot: mergedRoot,
+        onlyOrphans: options.onlyOrphans,
+        liveFiles,
+        packageVersion: pkg.version,
+      })
+    : await reportGraph(graph, {
+        outPath: effectiveOut,
+        projectRoot: mergedRoot,
+        onlyOrphans: options.onlyOrphans,
+        liveFiles,
+        symbols: fileToSymbols,
+        consumptionIndex,
+        exportUsageMap: new Map(
+          Array.from(fileToSymbols.entries()).map(([k, v]) => [
+            k,
+            v.exportUsage || undefined,
+          ])
+        ),
+        entrypointSet,
+        packageVersion: pkg.version,
+      });
+  console.log(`Report generated at ${writtenPath}`);
+
+  // Generate analysis cache for the trace command
+  const allFiles = Array.from(graph.nodes);
+  const orphanFiles = allFiles.filter((f) => !liveFiles.has(f));
+  const reachableFiles = allFiles.filter((f) => liveFiles.has(f));
+
+  const cacheData = {
+    version: pkg.version,
+    timestamp: new Date().toISOString(),
+    root: mergedRoot,
+    entrypoints: Array.from(entrypointSet),
+    files: allFiles,
+    edges: graph.getEdges(),
+    reachable: reachableFiles,
+    orphans: orphanFiles,
+  };
+
+  const cachePath = await writeCache(mergedRoot, cacheData, effectiveCachePath);
+  console.log(`Analysis cache generated (used by 'codereap trace') at ${cachePath}`);
+
+  // Console summary — reuses the same liveFiles computed above
   if (options.dirOnly) {
     console.log('Finding orphan directories...');
-    // Count directories with orphan=true
-    const liveFiles = computeLiveFiles(graph, entrypoints);
     const dirRecords = require('../dist/reporter').computeDirectoryRecords(
       graph,
       mergedRoot,
@@ -895,24 +970,6 @@ async function main() {
     console.log(`Orphan directories count: ${orphanDirs.length}`);
   } else {
     console.log('Finding orphans...');
-    // Reachability-based orphan files (apply always-live from CLI + config)
-    let liveFiles = computeLiveFiles(graph, entrypoints);
-    if (alwaysLiveGlobs.length > 0) {
-      const resolvedAlways = (function () {
-        try {
-          return resolveGlobs(alwaysLiveGlobs);
-        } catch (_e) {
-          return [];
-        }
-      })();
-      for (const p of resolvedAlways) {
-        if (graph.nodes.has(p)) liveFiles.add(p);
-      }
-    }
-    // Convention files are always live
-    for (const p of conventionAlwaysLive) {
-      if (graph.nodes.has(p)) liveFiles.add(p);
-    }
     const orphans = [...graph.nodes].filter((n) => !liveFiles.has(n));
     // Apply exclude patterns at the end for printing consistency
     const micromatch = require('micromatch');
@@ -925,8 +982,3 @@ async function main() {
 
   console.log('Done.');
 }
-
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});

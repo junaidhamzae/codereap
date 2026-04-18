@@ -3,7 +3,11 @@
 exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys 1`] = `
 [
   {
+    "entrypoints": [
+      "A.ts",
+    ],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "A.ts",
     "orphan": false,
@@ -21,7 +25,16 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     },
   },
   {
+    "entrypoints": [
+      "A.ts",
+    ],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "A.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "B.ts",
     "orphan": false,
@@ -46,7 +59,16 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     },
   },
   {
+    "entrypoints": [
+      "A.ts",
+    ],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "B.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "C.ts",
     "orphan": false,
@@ -71,7 +93,9 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "D.ts",
     "orphan": true,
@@ -97,7 +121,9 @@ exports[`CLI basic-static fixture finds D.ts as orphan and outputs required keys
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "package.json",
     "orphan": false,

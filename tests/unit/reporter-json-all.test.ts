@@ -1,22 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { Graph } from '../../src/grapher';
 import { reportGraph } from '../../src/reporter';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'report-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('reportGraph JSON full path', () => {
-  it('writes JSON including exports for all and sorted imports for orphan', async () => withTempDir(async (root) => {
+  it('writes JSON including exports for all and sorted imports for orphan', async () => withTempDir('report-', async (root) => {
     const projectRoot = root;
     const A = path.join(root, 'A.ts');
     const B = path.join(root, 'B.ts');
@@ -47,12 +36,13 @@ describe('reportGraph JSON full path', () => {
     const usageMap = new Map<string, any>([[A, { named: {} }]]);
 
     const outBase = path.join(root, 'out');
-    const jsonPath = await reportGraph(g, outBase, projectRoot, false, new Set([A, B]), symbols, consumptionIndex, usageMap);
-    const data = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any[];
+    const jsonPath = await reportGraph(g, { outPath: outBase, projectRoot, onlyOrphans: false, liveFiles: new Set([A, B]), symbols, consumptionIndex, exportUsageMap: usageMap });
+    const report = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any;
+    const data = report.files;
     // both rows should be present
     expect(Array.isArray(data) && data.length === 2).toBe(true);
-    const aRow = data.find(r => r.node === 'A.ts');
-    const bRow = data.find(r => r.node === 'B.ts');
+    const aRow = data.find((r: any) => r.node === 'A.ts');
+    const bRow = data.find((r: any) => r.node === 'B.ts');
     expect(aRow.symbols.exports).toBeDefined();
     expect(bRow.symbols.exports).toBeDefined();
     // A is live here; no imports array

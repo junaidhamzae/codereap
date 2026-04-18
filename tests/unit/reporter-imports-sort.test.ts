@@ -1,22 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { Graph } from '../../src/grapher';
 import { reportGraph } from '../../src/reporter';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'report-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('reporter orphan imports sorting', () => {
-  it('includes and sorts imports for orphan rows', async () => withTempDir(async (root) => {
+  it('includes and sorts imports for orphan rows', async () => withTempDir('report-', async (root) => {
     const projectRoot = root;
     const A = path.join(root, 'A.ts');
     const B = path.join(root, 'B.ts');
@@ -44,9 +33,9 @@ describe('reporter orphan imports sorting', () => {
     });
 
     const outBase = path.join(root, 'out');
-    const jsonPath = await reportGraph(g, outBase, projectRoot, false, new Set(), symbols);
-    const data = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any[];
-    const aRow = data.find(r => r.node === 'A.ts');
+    const jsonPath = await reportGraph(g, { outPath: outBase, projectRoot, onlyOrphans: false, liveFiles: new Set(), symbols });
+    const report = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any;
+    const aRow = report.files.find((r: any) => r.node === 'A.ts');
     expect(aRow.symbols.imports.map((i: any) => i.source)).toEqual(['./B', './z']);
   }));
 });

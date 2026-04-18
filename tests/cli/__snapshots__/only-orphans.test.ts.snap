@@ -3,7 +3,9 @@
 exports[`CLI --onlyOrphans with target enrichment includes symbols.imports with target info for resolvable imports 1`] = `
 [
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "A.ts",
     "orphan": true,
@@ -43,7 +45,14 @@ exports[`CLI --onlyOrphans with target enrichment includes symbols.imports with 
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "A.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "B.ts",
     "orphan": true,

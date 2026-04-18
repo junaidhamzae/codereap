@@ -8,6 +8,8 @@ export interface CodereapConfig {
   importRoot?: string;
   aliases?: Record<string, string | string[]>;
   out?: string;
+  /** Override the cache file location (without extension). Defaults to {root}/.codereap-cache */
+  cachePath?: string;
   /** Glob patterns for files that should always be considered live (relative to root) */
   alwaysLive?: string[];
   /** Manual edge declarations for imports that can't be statically detected.
@@ -21,7 +23,9 @@ export interface LoadedConfig {
   exclude: string[];
   importRoot?: string; // absolute path
   paths?: Record<string, string[]>; // tsconfig-like
-  out: string;
+  out?: string;
+  /** Override cache file path (absolute or relative to root, without .json extension) */
+  cachePath?: string;
   /** Glob patterns for files that should always be considered live */
   alwaysLive?: string[];
   /** Resolved implicit edges: keys are absolute file paths, values are glob patterns */
@@ -91,7 +95,8 @@ export function loadCodereapConfig(root: string, explicitPath?: string): LoadedC
     exclude,
     importRoot: importRootAbs,
     paths,
-    out: data.out || 'codereap-report',
+    out: data.out || undefined,
+    cachePath: data.cachePath ? path.resolve(rootAbs, data.cachePath) : undefined,
     alwaysLive,
     implicitEdges,
   };

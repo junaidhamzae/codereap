@@ -1,21 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { parseFile } from '../../src/parser';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('parser additional branches', () => {
-  it('handles require and dynamic import with non-literal args', async () => withTempDir(async (root) => {
+  it('handles require and dynamic import with non-literal args', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'n.ts');
     fs.writeFileSync(file, [
       'const mod = require(x);',
@@ -28,7 +17,7 @@ describe('parser additional branches', () => {
     expect(parsed.importSpecs).toEqual([]);
   }));
 
-  it('captures export { a } and default identifier case', async () => withTempDir(async (root) => {
+  it('captures export { a } and default identifier case', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'e.ts');
     fs.writeFileSync(file, [
       'const a = 1; export { a };',

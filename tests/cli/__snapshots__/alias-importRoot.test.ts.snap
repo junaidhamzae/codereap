@@ -3,7 +3,9 @@
 exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and importRoot 1`] = `
 [
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "package.json",
     "orphan": false,
@@ -21,7 +23,16 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     },
   },
   {
+    "entrypoints": [
+      "src/index.ts",
+    ],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "src/index.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "src/components/Button/index.ts",
     "orphan": false,
@@ -46,7 +57,11 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     },
   },
   {
+    "entrypoints": [
+      "src/index.ts",
+    ],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "src/index.ts",
     "orphan": false,
@@ -64,7 +79,16 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     },
   },
   {
+    "entrypoints": [
+      "src/index.ts",
+    ],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "src/index.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "src/util.ts",
     "orphan": false,
@@ -89,7 +113,9 @@ exports[`CLI alias/importRoot resolution resolves modules via tsconfig paths and
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "tsconfig.json",
     "orphan": false,

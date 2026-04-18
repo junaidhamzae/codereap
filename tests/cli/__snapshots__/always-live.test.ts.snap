@@ -3,7 +3,9 @@
 exports[`CLI --alwaysLive globs marks files live without edges 1`] = `
 [
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "A.ts",
     "orphan": true,
@@ -22,7 +24,9 @@ exports[`CLI --alwaysLive globs marks files live without edges 1`] = `
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "E.ts",
     "orphan": false,

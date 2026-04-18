@@ -1,21 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { parseFile } from '../../src/parser';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('parser imports', () => {
-  it('captures ESM default, named, and namespace imports', async () => withTempDir(async (root) => {
+  it('captures ESM default, named, and namespace imports', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'a.ts');
     fs.writeFileSync(
       file,
@@ -42,7 +31,7 @@ describe('parser imports', () => {
     );
   }));
 
-  it('captures CJS require default and destructured named', async () => withTempDir(async (root) => {
+  it('captures CJS require default and destructured named', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'b.ts');
     fs.writeFileSync(
       file,
@@ -64,7 +53,7 @@ describe('parser imports', () => {
     expect(parsed.imports).toEqual(expect.arrayContaining(['./x','./y','./z']));
   }));
 
-  it('captures dynamic import literals', async () => withTempDir(async (root) => {
+  it('captures dynamic import literals', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'c.ts');
     fs.writeFileSync(file, "import('./dyn')");
     const parsed = await parseFile(file, { collectSymbols: true });

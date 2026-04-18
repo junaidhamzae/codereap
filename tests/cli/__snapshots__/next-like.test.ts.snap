@@ -3,7 +3,16 @@
 exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 1`] = `
 [
   {
+    "entrypoints": [
+      "pages/index.ts",
+    ],
     "exists": true,
+    "imported-by": [
+      {
+        "file": "pages/index.ts",
+        "type": "static-import",
+      },
+    ],
     "in-degree": 1,
     "node": "components/Widget.ts",
     "orphan": false,
@@ -28,7 +37,9 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     },
   },
   {
+    "entrypoints": [],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "package.json",
     "orphan": false,
@@ -46,7 +57,11 @@ exports[`CLI Next-like auto seeding prints Next detection and seeds entrypoints 
     },
   },
   {
+    "entrypoints": [
+      "pages/index.ts",
+    ],
     "exists": true,
+    "imported-by": [],
     "in-degree": 0,
     "node": "pages/index.ts",
     "orphan": false,

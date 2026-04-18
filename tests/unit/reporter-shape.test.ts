@@ -1,22 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { Graph } from '../../src/grapher';
 import { reportGraph } from '../../src/reporter';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'report-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('reporter shape', () => {
-  it('emits exports for all rows; imports only for orphan rows; enrich target with onlyOrphans', async () => withTempDir(async (root) => {
+  it('emits exports for all rows; imports only for orphan rows; enrich target with onlyOrphans', async () => withTempDir('report-', async (root) => {
     const projectRoot = root; // absolute
     const A = path.join(root, 'A.ts');
     const B = path.join(root, 'B.ts');
@@ -42,18 +31,18 @@ describe('reporter shape', () => {
 
     const live = new Set([A, B]);
     const outBase = path.join(root, 'out');
-    const jsonPath = await reportGraph(g, outBase, projectRoot, true, live, symbols);
+    const jsonPath = await reportGraph(g, { outPath: outBase, projectRoot, onlyOrphans: true, liveFiles: live, symbols });
     expect(jsonPath).toBe(outBase + '.json');
-    const data = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any[];
+    const report = JSON.parse(fs.readFileSync(jsonPath!, 'utf8')) as any;
     // onlyOrphans: none should be emitted since live contains both
-    expect(data).toEqual([]);
+    expect(report.files).toEqual([]);
 
     // Now mark B as orphan and re-run
     const live2 = new Set([A]);
-    const jsonPath2 = await reportGraph(g, outBase, projectRoot, true, live2, symbols);
-    const data2 = JSON.parse(fs.readFileSync(jsonPath2!, 'utf8')) as any[];
-    expect(data2.length).toBe(1);
-    const row = data2[0];
+    const jsonPath2 = await reportGraph(g, { outPath: outBase, projectRoot, onlyOrphans: true, liveFiles: live2, symbols });
+    const report2 = JSON.parse(fs.readFileSync(jsonPath2!, 'utf8')) as any;
+    expect(report2.files.length).toBe(1);
+    const row = report2.files[0];
     expect(row.node).toBe(path.relative(projectRoot, B));
     expect(row.symbols?.exports).toBeDefined();
     // Orphan row with no imports should include an empty imports array
@@ -61,9 +50,9 @@ describe('reporter shape', () => {
 
     // Make A orphan so its imports appear and are enriched
     const live3 = new Set<string>();
-    const jsonPath3 = await reportGraph(g, outBase, projectRoot, true, live3, symbols);
-    const data3 = JSON.parse(fs.readFileSync(jsonPath3!, 'utf8')) as any[];
-    const aRow = data3.find(r => r.node === path.relative(projectRoot, A));
+    const jsonPath3 = await reportGraph(g, { outPath: outBase, projectRoot, onlyOrphans: true, liveFiles: live3, symbols });
+    const report3 = JSON.parse(fs.readFileSync(jsonPath3!, 'utf8')) as any;
+    const aRow = report3.files.find((r: any) => r.node === path.relative(projectRoot, A));
     expect(aRow.symbols.imports[0]).toEqual(expect.objectContaining({ source: './B', resolved: path.relative(projectRoot, B) }));
     expect(aRow.symbols.imports[0].target).toEqual(expect.objectContaining({ node: path.relative(projectRoot, B) }));
   }));

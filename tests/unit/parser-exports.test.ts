@@ -1,21 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { parseFile } from '../../src/parser';
-
-function withTempDir(run: (dir: string) => Promise<void> | void) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-'));
-  const res = run(dir);
-  if (res && typeof (res as any).then === 'function') {
-    return (res as Promise<void>).finally(() => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    });
-  }
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-}
+import { withTempDir } from '../helpers/withTempDir';
 
 describe('parser exports', () => {
-  it('captures default and named exports and re-exports', async () => withTempDir(async (root) => {
+  it('captures default and named exports and re-exports', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'm.ts');
     fs.writeFileSync(
       file,
@@ -39,7 +28,7 @@ describe('parser exports', () => {
     );
   }));
 
-  it('computes exportUsage.referencedInFile for default and named', async () => withTempDir(async (root) => {
+  it('computes exportUsage.referencedInFile for default and named', async () => withTempDir('parser-', async (root) => {
     const file = path.join(root, 'u.ts');
     fs.writeFileSync(
       file,
